@@ -6,6 +6,8 @@ use std::panic::AssertUnwindSafe;
 use tracing::info;
 
 use crate::channels::traits::ChannelMessage;
+use crate::orchestrator::session::SessionKey;
+use crate::orchestrator::spawn::SpawnParams;
 use crate::providers::traits::{ChatMessage, ChatResponse};
 use crate::tools::traits::ToolResult;
 
@@ -112,6 +114,92 @@ impl HookRunner {
             .handlers
             .iter()
             .map(|h| h.on_heartbeat_tick())
+            .collect();
+        join_all(futs).await;
+    }
+
+    // ---------------------------------------------------------------
+    // Subagent lifecycle dispatchers (parallel, void)
+    // ---------------------------------------------------------------
+
+    pub async fn fire_subagent_spawning(&self, parent: &SessionKey, params: &SpawnParams) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.on_subagent_spawning(parent, params))
+            .collect();
+        join_all(futs).await;
+    }
+
+    pub async fn fire_subagent_spawned(
+        &self,
+        parent: &SessionKey,
+        child: &SessionKey,
+        run_id: &str,
+    ) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.on_subagent_spawned(parent, child, run_id))
+            .collect();
+        join_all(futs).await;
+    }
+
+    pub async fn fire_subagent_ended(
+        &self,
+        child: &SessionKey,
+        run_id: &str,
+        success: bool,
+        summary: Option<&str>,
+    ) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.on_subagent_ended(child, run_id, success, summary))
+            .collect();
+        join_all(futs).await;
+    }
+
+    // ---------------------------------------------------------------
+    // Context/compaction dispatchers (parallel, void)
+    // ---------------------------------------------------------------
+
+    pub async fn fire_before_compaction(&self, session_id: &str, message_count: usize) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.before_compaction(session_id, message_count))
+            .collect();
+        join_all(futs).await;
+    }
+
+    pub async fn fire_after_compaction(&self, session_id: &str, messages_removed: usize) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.after_compaction(session_id, messages_removed))
+            .collect();
+        join_all(futs).await;
+    }
+
+    // ---------------------------------------------------------------
+    // Agent lifecycle dispatchers (parallel, void)
+    // ---------------------------------------------------------------
+
+    pub async fn fire_before_agent_start(&self, agent_id: &str, model: &str) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.before_agent_start(agent_id, model))
+            .collect();
+        join_all(futs).await;
+    }
+
+    pub async fn fire_after_agent_end(&self, agent_id: &str, duration: Duration) {
+        let futs: Vec<_> = self
+            .handlers
+            .iter()
+            .map(|h| h.after_agent_end(agent_id, duration))
             .collect();
         join_all(futs).await;
     }

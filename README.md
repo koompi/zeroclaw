@@ -472,6 +472,136 @@ keyword_weight = 0.3
 # ZEROCLAW_LUCID_FAILURE_COOLDOWN_MS=15000           # cooldown after lucid failure to avoid repeated slow attempts
 ```
 
+## Sentinel — Multi-Agent Orchestrator
+
+ZeroClaw includes **Sentinel**, a multi-agent orchestrator that coordinates specialized AI agents to accomplish complex goals — from building full-stack products to running business operations.
+
+```
+                         ┌──────────────────┐
+                         │     Sentinel     │
+                         │   Orchestrator   │
+                         │                  │
+                         │ Decompose → Assign│
+                         │ Execute → Report  │
+                         └────────┬─────────┘
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                     │
+      ┌──────▼──────┐    ┌──────▼───────┐    ┌───────▼──────┐
+      │   Builder    │    │   Business   │    │   Research   │
+      │   Cluster    │    │   Cluster    │    │   Cluster    │
+      └──────┬──────┘    └──────┬───────┘    └───────┬──────┘
+             │                  │                     │
+      ┌──────┼──────┐   ┌──────┼──────┐       ┌─────┼─────┐
+      │      │      │   │      │      │       │           │
+   Archon  Prism  Forge Nexus Echo Closer   Oracle    Veasna
+```
+
+### Agent Roster
+
+| Code Name | Role | Specialty |
+|---|---|---|
+| **Sentinel** | Orchestrator | Decomposes goals, assigns agents, synthesizes results |
+| **Archon** | System Architect | System design, API contracts, architecture decisions |
+| **Prism** | UI/UX Expert | User flows, components, accessibility, design systems |
+| **Forge** | Fullstack Engineer | Implementation, testing, debugging, deployment |
+| **Nexus** | Business Dev | Partnerships, proposals, pipeline, strategy |
+| **Echo** | Marketing | Content, campaigns, positioning, analytics |
+| **Closer** | Sales | Outreach, qualification, objection handling, demos |
+| **Oracle** | Researcher | Market analysis, competitive intel, technology scouting |
+| **Veasna** (វាសនា) | Khmer Expert | Cultural translation, Khmer authoring, localization |
+
+### How It Works
+
+1. **User sends a goal** → Sentinel classifies and decomposes it
+2. **Sentinel assigns subtasks** → Each goes to the right agent by expertise
+3. **Agents execute in parallel** → Builder, Business, and Research clusters work simultaneously
+4. **Push-based completion** → Agents announce results when done (no polling)
+5. **Sentinel synthesizes** → Combines outputs into a unified deliverable
+
+### Orchestrator Architecture (`src/orchestrator/`)
+
+| Module | Purpose |
+|---|---|
+| `session.rs` | Deterministic session keys: `agent:<id>:<type>:<uuid>` |
+| `registry.rs` | Thread-safe subagent run registry (in-memory + disk-backed) |
+| `spawn.rs` | Spawn protocol: `run` (one-shot) or `session` (persistent) modes |
+| `announce.rs` | Push-based completion delivery with exponential backoff retry |
+| `depth.rs` | Spawn depth + concurrency limits (prevent runaway recursion) |
+| `policy.rs` | Spawn allowlists, sandbox inheritance, policy gates |
+| `traits.rs` | `Orchestrator` trait + `DefaultOrchestrator` implementation |
+
+### Persona System (`src/personas/`)
+
+Each agent is backed by a Persona that defines its system prompt, allowed tools, model preferences, and constraints. Personas encode the required tech stack:
+
+- **Bots**: Python
+- **Frontend**: React + Vite.js or Next.js, TypeScript, Tailwind CSS, shadcn/ui
+- **Speed-critical backends**: Rust
+- **Payment**: Stripe + [Baray.io](https://baray.io/llm.txt)
+- **Authentication**: [KOOMPI ID OAuth](https://dash.koompi.org/llms.txt)
+
+### Multi-User Workspace Isolation (`src/workspace/`)
+
+Each user gets fully isolated storage:
+
+```
+~/.zeroclaw/users/
+  user-a/
+    chats/              # Conversation history per session
+    dir-app-00/         # First project workspace
+    dir-app-01/         # Second project workspace
+  user-b/
+    chats/
+    dir-app-00/
+```
+
+Users are identified by channel identity (Telegram @username, Discord ID, email, etc.) and can never access each other's data.
+
+### Context Engine (`src/context/`)
+
+Budget-aware context management for long-running sessions:
+
+- **Token budget tracking** — reserves space for responses, triggers compaction at threshold
+- **Priority-ranked assembly** — high-priority context (persona, system) survives; low-priority gets dropped
+- **Automatic compaction** — removes old messages, generates summaries, stays within window
+
+### Claude Code Integration (`src/tools/claude_code.rs`)
+
+Forge and Prism delegate implementation to Claude Code via a first-class tool:
+
+```
+claude_code --mode plan      # Analyze and propose (Archon uses this)
+claude_code --mode implement # Write code and tests (Forge uses this)
+claude_code --mode review    # Audit code quality (Archon uses this)
+claude_code --mode fix       # Diagnose and repair (Forge uses this)
+```
+
+### Canvas UI System (`src/canvas/`)
+
+Agents can render interactive UIs — dashboards, forms, tables, reports — served through the gateway with Tailwind CSS styling and WebSocket-based live updates.
+
+### Sentinel Identity Files (`sentinel/`)
+
+| File | Purpose |
+|---|---|
+| [`SOUL.md`](sentinel/SOUL.md) | Who Sentinel is — personality, principles, decision framework |
+| [`AGENTS.md`](sentinel/AGENTS.md) | Full roster with routing rules and tool access |
+| [`HEARTBEAT.md`](sentinel/HEARTBEAT.md) | Health monitoring, status reporting, failure recovery |
+| [`IDENTITY.md`](sentinel/IDENTITY.md) | Naming system, code name origins, communication protocol |
+| [`TOOLS.md`](sentinel/TOOLS.md) | Tool access matrix per agent, tech stack enforcement |
+| [`USER.md`](sentinel/USER.md) | Multi-user isolation, interaction model, commands |
+
+### Real-Time Telegram Streaming
+
+Responses stream to Telegram in real-time using the native `sendMessageDraft` API (Bot API 9.3+):
+
+```toml
+[telegram]
+stream_mode = "native"           # Real-time streaming (recommended)
+draft_update_interval_ms = 500   # Rate limit protection
+```
+
 ## Security
 
 ZeroClaw enforces security at **every layer** — not just the sandbox. It passes all items from the community security checklist.

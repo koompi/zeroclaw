@@ -380,6 +380,69 @@ Voir [Référence des Commandes](docs/commands-reference.md) pour les options et
 
 Voir [documentation architecture](docs/architecture.svg) pour les diagrammes détaillés et les détails d'implémentation.
 
+## Sentinel — Orchestrateur Multi-Agents
+
+ZeroClaw intègre **Sentinel**, un orchestrateur multi-agents qui coordonne des agents IA spécialisés pour accomplir des objectifs complexes — de la construction de produits full-stack aux opérations business.
+
+```
+                         ┌──────────────────┐
+                         │     Sentinel     │
+                         │  Orchestrateur   │
+                         │                  │
+                         │ Décomposer →     │
+                         │ Assigner →       │
+                         │ Exécuter →       │
+                         │ Synthétiser      │
+                         └────────┬─────────┘
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                     │
+      ┌──────▼──────┐    ┌──────▼───────┐    ┌───────▼──────┐
+      │   Builder    │    │   Business   │    │   Research   │
+      │   Cluster    │    │   Cluster    │    │   Cluster    │
+      └──────┬──────┘    └──────┬───────┘    └───────┬──────┘
+             │                  │                     │
+      ┌──────┼──────┐   ┌──────┼──────┐       ┌─────┼─────┐
+      │      │      │   │      │      │       │           │
+   Archon  Prism  Forge Nexus Echo Closer   Oracle    Veasna
+```
+
+### Liste des Agents
+
+| Nom de code | Rôle | Spécialité |
+|-------------|------|-----------|
+| **Sentinel** | Orchestrateur | Décompose les objectifs, assigne les agents, synthétise les résultats |
+| **Archon** | Architecte Système | Conception, contrats API, décisions d'architecture |
+| **Prism** | Expert UI/UX | Flux utilisateur, composants, systèmes de design |
+| **Forge** | Ingénieur Fullstack | Implémentation, tests, débogage, déploiement |
+| **Nexus** | Développement Business | Partenariats, propositions, stratégie |
+| **Echo** | Marketing | Contenu, campagnes, analyse |
+| **Closer** | Ventes | Prospection, qualification, démonstrations |
+| **Oracle** | Chercheur | Analyse de marché, veille concurrentielle, scouting technologique |
+| **Veasna** (វាសនា) | Expert Khmer | Traduction culturelle, rédaction khmère, localisation |
+
+### Fonctionnement
+
+1. **L'utilisateur envoie un objectif** → Sentinel classifie et décompose
+2. **Sentinel assigne les sous-tâches** → routage par expertise
+3. **Les agents exécutent en parallèle** → clusters Builder, Business et Research simultanément
+4. **Notification push de complétion** → les agents annoncent leurs résultats (pas de polling)
+5. **Sentinel synthétise** → combine les résultats en un livrable unifié
+
+### Sous-systèmes Clés
+
+| Sous-système | Chemin | Fonction |
+|-------------|--------|----------|
+| Orchestrateur | `src/orchestrator/` | Registre des sous-agents, politique de spawn, limites de profondeur, notifications |
+| Moteur de Contexte | `src/context/` | Budget de tokens, assemblage par priorité, compaction automatique |
+| Canvas | `src/canvas/` | UI interactive via Gateway (tableaux de bord, formulaires, rapports) |
+| Personas | `src/personas/` | Prompts système, outils autorisés, préférences de modèle par agent |
+| Workspace | `src/workspace/` | Stockage isolé par utilisateur, validation de chemins, multi-utilisateur |
+| Outil Delegate | `src/tools/delegate.rs` | Pont entre Sentinel et les sous-agents |
+| Claude Code | `src/tools/claude_code.rs` | Planification/implémentation/revue/correction via CLI |
+
+Pour plus de détails, voir le README principal en anglais : [`README.md`](README.md)
+
 ## Exemples
 
 ### Telegram Bot

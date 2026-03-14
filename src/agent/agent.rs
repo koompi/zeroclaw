@@ -37,6 +37,8 @@ pub struct Agent {
     classification_config: crate::config::QueryClassificationConfig,
     available_hints: Vec<String>,
     route_model_by_hint: HashMap<String, String>,
+    /// Active persona (if configured). Shapes system prompt, tool access, model, temperature.
+    persona: Option<Box<dyn crate::personas::traits::Persona>>,
 }
 
 pub struct AgentBuilder {
@@ -58,6 +60,7 @@ pub struct AgentBuilder {
     classification_config: Option<crate::config::QueryClassificationConfig>,
     available_hints: Option<Vec<String>>,
     route_model_by_hint: Option<HashMap<String, String>>,
+    persona: Option<Box<dyn crate::personas::traits::Persona>>,
 }
 
 impl AgentBuilder {
@@ -81,6 +84,7 @@ impl AgentBuilder {
             classification_config: None,
             available_hints: None,
             route_model_by_hint: None,
+            persona: None,
         }
     }
 
@@ -180,11 +184,50 @@ impl AgentBuilder {
         self
     }
 
+    pub fn persona(mut self, persona: Box<dyn crate::personas::traits::Persona>) -> Self {
+        self.persona = Some(persona);
+        self
+    }
+
     pub fn build(self) -> Result<Agent> {
-        let tools = self
+        let mut tools = self
             .tools
             .ok_or_else(|| anyhow::anyhow!("tools are required"))?;
+
+        // Apply persona tool filtering if a persona is set.
+        if let Some(ref persona) = self.persona {
+            let allowed = persona.allowed_tools();
+            let denied = persona.denied_tools();
+            if !allowed.is_empty() {
+                tools.retain(|t| allowed.iter().any(|a| a == t.name()));
+            }
+            if !denied.is_empty() {
+                tools.retain(|t| !denied.iter().any(|d| d == t.name()));
+            }
+        }
+
         let tool_specs = tools.iter().map(|tool| tool.spec()).collect();
+
+        // Apply persona model/temperature overrides.
+        let model_name = if let Some(ref persona) = self.persona {
+            persona
+                .suggested_model()
+                .map(String::from)
+                .or(self.model_name)
+                .unwrap_or_else(|| "anthropic/claude-sonnet-4-20250514".into())
+        } else {
+            self.model_name
+                .unwrap_or_else(|| "anthropic/claude-sonnet-4-20250514".into())
+        };
+
+        let temperature = if let Some(ref persona) = self.persona {
+            persona
+                .suggested_temperature()
+                .or(self.temperature)
+                .unwrap_or(0.7)
+        } else {
+            self.temperature.unwrap_or(0.7)
+        };
 
         Ok(Agent {
             provider: self
@@ -208,10 +251,8 @@ impl AgentBuilder {
                 .memory_loader
                 .unwrap_or_else(|| Box::new(DefaultMemoryLoader::default())),
             config: self.config.unwrap_or_default(),
-            model_name: self
-                .model_name
-                .unwrap_or_else(|| "anthropic/claude-sonnet-4-20250514".into()),
-            temperature: self.temperature.unwrap_or(0.7),
+            model_name,
+            temperature,
             workspace_dir: self
                 .workspace_dir
                 .unwrap_or_else(|| std::path::PathBuf::from(".")),
@@ -223,6 +264,7 @@ impl AgentBuilder {
             classification_config: self.classification_config.unwrap_or_default(),
             available_hints: self.available_hints.unwrap_or_default(),
             route_model_by_hint: self.route_model_by_hint.unwrap_or_default(),
+            persona: self.persona,
         })
     }
 }
@@ -317,7 +359,7 @@ impl Agent {
             .collect();
         let available_hints: Vec<String> = route_model_by_hint.keys().cloned().collect();
 
-        Agent::builder()
+        let mut builder = Agent::builder()
             .provider(provider)
             .tools(tools)
             .memory(memory)
@@ -341,8 +383,26 @@ impl Agent {
                 config,
             ))
             .skills_prompt_mode(config.skills.prompt_injection_mode)
-            .auto_save(config.memory.auto_save)
-            .build()
+            .auto_save(config.memory.auto_save);
+
+        // Load persona if configured.
+        if let Some(ref persona_role) = config.agent.persona {
+            if let Some(persona) = crate::personas::create_persona(persona_role) {
+                tracing::info!(
+                    persona = persona.display_name(),
+                    role = %persona.role(),
+                    "Persona activated"
+                );
+                builder = builder.persona(persona);
+            } else {
+                tracing::warn!(
+                    persona = persona_role.as_str(),
+                    "Unknown persona role, ignoring"
+                );
+            }
+        }
+
+        builder.build()
     }
 
     fn trim_history(&mut self) {
@@ -383,7 +443,18 @@ impl Agent {
             identity_config: Some(&self.identity_config),
             dispatcher_instructions: &instructions,
         };
-        self.prompt_builder.build(&ctx)
+        let mut prompt = self.prompt_builder.build(&ctx)?;
+
+        // Inject persona system prompt at the beginning if active.
+        if let Some(ref persona) = self.persona {
+            let persona_prompt = persona.system_prompt();
+            prompt = format!(
+                "## Persona: {name}\n\n{persona_prompt}\n\n---\n\n{prompt}",
+                name = persona.display_name()
+            );
+        }
+
+        Ok(prompt)
     }
 
     async fn execute_tool_call(&self, call: &ParsedToolCall) -> ToolExecutionResult {

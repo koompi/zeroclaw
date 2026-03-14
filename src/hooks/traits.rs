@@ -3,6 +3,8 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::channels::traits::ChannelMessage;
+use crate::orchestrator::session::SessionKey;
+use crate::orchestrator::spawn::SpawnParams;
 use crate::providers::traits::{ChatMessage, ChatResponse};
 use crate::tools::traits::ToolResult;
 
@@ -38,6 +40,26 @@ pub trait HookHandler: Send + Sync {
     async fn on_after_tool_call(&self, _tool: &str, _result: &ToolResult, _duration: Duration) {}
     async fn on_message_sent(&self, _channel: &str, _recipient: &str, _content: &str) {}
     async fn on_heartbeat_tick(&self) {}
+
+    // --- Subagent lifecycle hooks (void, parallel) ---
+    async fn on_subagent_spawning(&self, _parent: &SessionKey, _params: &SpawnParams) {}
+    async fn on_subagent_spawned(&self, _parent: &SessionKey, _child: &SessionKey, _run_id: &str) {}
+    async fn on_subagent_ended(
+        &self,
+        _child: &SessionKey,
+        _run_id: &str,
+        _success: bool,
+        _summary: Option<&str>,
+    ) {
+    }
+
+    // --- Context/compaction hooks (void, parallel) ---
+    async fn before_compaction(&self, _session_id: &str, _message_count: usize) {}
+    async fn after_compaction(&self, _session_id: &str, _messages_removed: usize) {}
+
+    // --- Agent lifecycle hooks (void, parallel) ---
+    async fn before_agent_start(&self, _agent_id: &str, _model: &str) {}
+    async fn after_agent_end(&self, _agent_id: &str, _duration: Duration) {}
 
     // --- Modifying hooks (sequential by priority, can cancel) ---
     async fn before_model_resolve(

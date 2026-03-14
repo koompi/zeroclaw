@@ -41,8 +41,10 @@ use serde::{Deserialize, Serialize};
 pub mod agent;
 pub(crate) mod approval;
 pub(crate) mod auth;
+pub mod canvas;
 pub mod channels;
 pub mod config;
+pub mod context;
 pub(crate) mod cost;
 pub(crate) mod cron;
 pub(crate) mod daemon;
@@ -58,6 +60,8 @@ pub mod memory;
 pub(crate) mod migration;
 pub(crate) mod multimodal;
 pub mod observability;
+pub mod orchestrator;
+pub mod personas;
 pub(crate) mod onboard;
 pub mod peripherals;
 pub mod providers;
@@ -69,6 +73,7 @@ pub(crate) mod skills;
 pub mod tools;
 pub(crate) mod tunnel;
 pub(crate) mod util;
+pub mod workspace;
 
 pub use config::Config;
 

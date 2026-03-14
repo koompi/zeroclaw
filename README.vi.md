@@ -457,6 +457,67 @@ keyword_weight = 0.3
 # ZEROCLAW_LUCID_FAILURE_COOLDOWN_MS=15000           # thời gian nghỉ sau lỗi lucid, tránh thử lại liên tục
 ```
 
+## Sentinel — Bộ Điều Phối Đa Tác Tử
+
+ZeroClaw tích hợp **Sentinel**, một bộ điều phối đa tác tử phối hợp các AI agent chuyên biệt để hoàn thành mục tiêu phức tạp — từ xây dựng sản phẩm full-stack đến vận hành kinh doanh.
+
+```
+                         ┌──────────────────┐
+                         │     Sentinel     │
+                         │  Bộ điều phối    │
+                         │                  │
+                         │ Phân tách → Giao │
+                         │ Thực thi → Báo   │
+                         └────────┬─────────┘
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                     │
+      ┌──────▼──────┐    ┌──────▼───────┐    ┌───────▼──────┐
+      │   Builder    │    │   Business   │    │   Research   │
+      │   Cluster    │    │   Cluster    │    │   Cluster    │
+      └──────┬──────┘    └──────┬───────┘    └───────┬──────┘
+             │                  │                     │
+      ┌──────┼──────┐   ┌──────┼──────┐       ┌─────┼─────┐
+      │      │      │   │      │      │       │           │
+   Archon  Prism  Forge Nexus Echo Closer   Oracle    Veasna
+```
+
+### Danh sách Agent
+
+| Mật danh | Vai trò | Chuyên môn |
+|----------|---------|-----------|
+| **Sentinel** | Bộ điều phối | Phân tách mục tiêu, giao agent, tổng hợp kết quả |
+| **Archon** | Kiến trúc sư hệ thống | Thiết kế, API contract, quyết định kiến trúc |
+| **Prism** | Chuyên gia UI/UX | Luồng người dùng, component, hệ thống thiết kế |
+| **Forge** | Kỹ sư Fullstack | Triển khai, test, debug, deploy |
+| **Nexus** | Phát triển kinh doanh | Đối tác, đề xuất, chiến lược |
+| **Echo** | Marketing | Nội dung, chiến dịch, phân tích |
+| **Closer** | Sales | Tiếp cận, đánh giá, demo |
+| **Oracle** | Nhà nghiên cứu | Phân tích thị trường, tình báo cạnh tranh, dò quét công nghệ |
+| **Veasna** (វាសនា) | Chuyên gia Khmer | Dịch thuật văn hóa, sáng tác tiếng Khmer, bản địa hóa |
+
+### Cách hoạt động
+
+1. **Người dùng gửi mục tiêu** → Sentinel phân loại và phân tách
+2. **Sentinel giao nhiệm vụ con** → định tuyến theo chuyên môn
+3. **Agent thực thi song song** → các cluster Builder, Business, Research hoạt động đồng thời
+4. **Thông báo hoàn thành kiểu push** → agent tự báo kết quả (không polling)
+5. **Sentinel tổng hợp** → gộp kết quả thành sản phẩm thống nhất
+
+### Hệ thống con chính
+
+| Hệ thống con | Đường dẫn | Chức năng |
+|-------------|-----------|-----------|
+| Bộ điều phối | `src/orchestrator/` | Quản lý sub-agent, chính sách spawn, giới hạn độ sâu, thông báo |
+| Context Engine | `src/context/` | Ngân sách token, lắp ráp theo ưu tiên, nén tự động |
+| Canvas | `src/canvas/` | UI tương tác qua Gateway (dashboard, form, báo cáo) |
+| Persona | `src/personas/` | System prompt, tool được phép, model ưu tiên cho từng agent |
+| Workspace | `src/workspace/` | Lưu trữ cô lập theo người dùng, xác thực đường dẫn, đa người dùng |
+| Delegate Tool | `src/tools/delegate.rs` | Cầu nối giữa Sentinel và sub-agent |
+| Claude Code | `src/tools/claude_code.rs` | Lập kế hoạch/triển khai/review/sửa lỗi qua CLI |
+
+Chi tiết xem README tiếng Anh: [`README.md`](README.md)
+
 ## Bảo mật
 
 ZeroClaw thực thi bảo mật ở **mọi lớp** — không chỉ sandbox. Đáp ứng tất cả các hạng mục trong danh sách kiểm tra bảo mật của cộng đồng.

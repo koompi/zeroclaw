@@ -411,6 +411,11 @@ pub struct AgentConfig {
     /// Tool dispatch strategy (e.g. `"auto"`). Default: `"auto"`.
     #[serde(default = "default_agent_tool_dispatcher")]
     pub tool_dispatcher: String,
+    /// Persona role for this agent (e.g. "archon", "forge", "oracle", "veasna").
+    /// When set, the persona's system prompt, tool access, model, and temperature
+    /// preferences are applied. See `sentinel/AGENTS.md` for the full roster.
+    #[serde(default)]
+    pub persona: Option<String>,
 }
 
 fn default_agent_max_tool_iterations() -> usize {
@@ -433,6 +438,7 @@ impl Default for AgentConfig {
             max_history_messages: default_agent_max_history_messages(),
             parallel_tools: false,
             tool_dispatcher: default_agent_tool_dispatcher(),
+            persona: None,
         }
     }
 }
@@ -2732,8 +2738,12 @@ pub enum StreamMode {
     /// No streaming -- send the complete response as a single message (default).
     #[default]
     Off,
-    /// Update a draft message with every flush interval.
+    /// Update a draft message with every flush interval (legacy: sendMessage + editMessageText).
     Partial,
+    /// Native streaming via Telegram Bot API 9.3+ `sendMessageDraft` method.
+    /// Text is streamed in real-time as it's generated, without edit-based polling.
+    /// Falls back to `Partial` if the Bot API server doesn't support it.
+    Native,
 }
 
 fn default_draft_update_interval_ms() -> u64 {
@@ -2747,7 +2757,10 @@ pub struct TelegramConfig {
     pub bot_token: String,
     /// Allowed Telegram user IDs or usernames. Empty = deny all.
     pub allowed_users: Vec<String>,
-    /// Streaming mode for progressive response delivery via message edits.
+    /// Streaming mode for progressive response delivery.
+    /// `"native"` (recommended) uses Telegram Bot API 9.3+ `sendMessageDraft` for real-time streaming.
+    /// `"partial"` uses legacy sendMessage + editMessageText.
+    /// `"off"` sends the complete response as a single message.
     #[serde(default)]
     pub stream_mode: StreamMode,
     /// Minimum interval (ms) between draft message edits to avoid rate limits.

@@ -33,6 +33,10 @@ pub struct DelegateTool {
     parent_tools: Arc<Vec<Arc<dyn Tool>>>,
     /// Inherited multimodal handling config for sub-agent loops.
     multimodal_config: crate::config::MultimodalConfig,
+    /// Optional orchestrator registry for tracking subagent lifecycle.
+    /// When set, delegate calls are registered, tracked, and announced
+    /// through the orchestrator system.
+    orchestrator_registry: Option<crate::orchestrator::SubagentRegistry>,
 }
 
 impl DelegateTool {
@@ -63,6 +67,7 @@ impl DelegateTool {
             depth: 0,
             parent_tools: Arc::new(Vec::new()),
             multimodal_config: crate::config::MultimodalConfig::default(),
+            orchestrator_registry: None,
         }
     }
 
@@ -99,6 +104,7 @@ impl DelegateTool {
             depth,
             parent_tools: Arc::new(Vec::new()),
             multimodal_config: crate::config::MultimodalConfig::default(),
+            orchestrator_registry: None,
         }
     }
 
@@ -111,6 +117,17 @@ impl DelegateTool {
     /// Attach multimodal configuration for sub-agent tool loops.
     pub fn with_multimodal_config(mut self, config: crate::config::MultimodalConfig) -> Self {
         self.multimodal_config = config;
+        self
+    }
+
+    /// Attach an orchestrator registry for subagent lifecycle tracking.
+    /// When set, every delegate call is registered, tracked, and marked
+    /// complete in the registry — enabling announce delivery and observability.
+    pub fn with_orchestrator_registry(
+        mut self,
+        registry: crate::orchestrator::SubagentRegistry,
+    ) -> Self {
+        self.orchestrator_registry = Some(registry);
         self
     }
 }
@@ -275,9 +292,38 @@ impl Tool for DelegateTool {
 
         let temperature = agent_config.temperature.unwrap_or(0.7);
 
+        // Register with orchestrator if available.
+        let run_id = if let Some(ref registry) = self.orchestrator_registry {
+            let parent_key =
+                crate::orchestrator::session::SessionKey::main("sentinel");
+            let child_key =
+                crate::orchestrator::session::SessionKey::subagent(agent_name);
+            let id = registry
+                .register(
+                    child_key,
+                    parent_key,
+                    prompt.to_string(),
+                    Some(agent_name.to_string()),
+                    Some(agent_config.model.clone()),
+                    crate::orchestrator::spawn::SpawnMode::Run,
+                    crate::orchestrator::spawn::CleanupStrategy::Delete,
+                    Some(if agent_config.agentic {
+                        DELEGATE_AGENTIC_TIMEOUT_SECS
+                    } else {
+                        DELEGATE_TIMEOUT_SECS
+                    }),
+                    self.depth,
+                )
+                .await;
+            registry.mark_started(&id).await;
+            Some(id)
+        } else {
+            None
+        };
+
         // Agentic mode: run full tool-call loop with allowlisted tools.
         if agent_config.agentic {
-            return self
+            let result = self
                 .execute_agentic(
                     agent_name,
                     agent_config,
@@ -286,6 +332,30 @@ impl Tool for DelegateTool {
                     temperature,
                 )
                 .await;
+            // Track completion in registry.
+            if let (Some(ref registry), Some(ref rid)) =
+                (&self.orchestrator_registry, &run_id)
+            {
+                if let Ok(ref tool_result) = result {
+                    registry
+                        .mark_ended(
+                            rid,
+                            crate::orchestrator::registry::RunOutcome {
+                                success: tool_result.success,
+                                summary: Some(tool_result.output.chars().take(500).collect()),
+                                error: tool_result.error.clone(),
+                            },
+                            if tool_result.success {
+                                crate::orchestrator::registry::EndReason::Completed
+                            } else {
+                                crate::orchestrator::registry::EndReason::Failed
+                            },
+                            Some(tool_result.output.clone()),
+                        )
+                        .await;
+                }
+            }
+            return result;
         }
 
         // Wrap the provider call in a timeout to prevent indefinite blocking
@@ -313,14 +383,14 @@ impl Tool for DelegateTool {
             }
         };
 
-        match result {
+        let tool_result = match result {
             Ok(response) => {
                 let mut rendered = response;
                 if rendered.trim().is_empty() {
                     rendered = "[Empty response]".to_string();
                 }
 
-                Ok(ToolResult {
+                ToolResult {
                     success: true,
                     output: format!(
                         "[Agent '{agent_name}' ({provider}/{model})]\n{rendered}",
@@ -328,14 +398,36 @@ impl Tool for DelegateTool {
                         model = agent_config.model
                     ),
                     error: None,
-                })
+                }
             }
-            Err(e) => Ok(ToolResult {
+            Err(e) => ToolResult {
                 success: false,
                 output: String::new(),
                 error: Some(format!("Agent '{agent_name}' failed: {e}",)),
-            }),
+            },
+        };
+
+        // Track completion in orchestrator registry.
+        if let (Some(ref registry), Some(ref rid)) = (&self.orchestrator_registry, &run_id) {
+            registry
+                .mark_ended(
+                    rid,
+                    crate::orchestrator::registry::RunOutcome {
+                        success: tool_result.success,
+                        summary: Some(tool_result.output.chars().take(500).collect()),
+                        error: tool_result.error.clone(),
+                    },
+                    if tool_result.success {
+                        crate::orchestrator::registry::EndReason::Completed
+                    } else {
+                        crate::orchestrator::registry::EndReason::Failed
+                    },
+                    Some(tool_result.output.clone()),
+                )
+                .await;
         }
+
+        Ok(tool_result)
     }
 }
 

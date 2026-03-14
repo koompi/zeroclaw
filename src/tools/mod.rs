@@ -17,6 +17,7 @@
 
 pub mod browser;
 pub mod browser_open;
+pub mod claude_code;
 pub mod cli_discovery;
 pub mod composio;
 pub mod content_search;
@@ -45,6 +46,7 @@ pub mod memory_recall;
 pub mod memory_store;
 pub mod model_routing_config;
 pub mod pdf_read;
+pub mod proposal_gen;
 pub mod proxy_config;
 pub mod pushover;
 pub mod schedule;
@@ -57,6 +59,7 @@ pub mod web_search_tool;
 
 pub use browser::{BrowserTool, ComputerUseConfig};
 pub use browser_open::BrowserOpenTool;
+pub use claude_code::ClaudeCodeTool;
 pub use composio::ComposioTool;
 pub use content_search::ContentSearchTool;
 pub use cron_add::CronAddTool;
@@ -84,6 +87,7 @@ pub use memory_recall::MemoryRecallTool;
 pub use memory_store::MemoryStoreTool;
 pub use model_routing_config::ModelRoutingConfigTool;
 pub use pdf_read::PdfReadTool;
+pub use proposal_gen::ProposalGenTool;
 pub use proxy_config::ProxyConfigTool;
 pub use pushover::PushoverTool;
 pub use schedule::ScheduleTool;
@@ -99,11 +103,19 @@ pub use web_search_tool::WebSearchTool;
 
 use crate::config::{Config, DelegateAgentConfig};
 use crate::memory::Memory;
+use crate::orchestrator::SubagentRegistry;
 use crate::runtime::{NativeRuntime, RuntimeAdapter};
 use crate::security::SecurityPolicy;
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+/// Global shared subagent registry. Ensures all DelegateTool instances
+/// share the same registry for consistent lifecycle tracking.
+fn shared_registry() -> SubagentRegistry {
+    static REGISTRY: OnceLock<SubagentRegistry> = OnceLock::new();
+    REGISTRY.get_or_init(SubagentRegistry::new).clone()
+}
 
 #[derive(Clone)]
 struct ArcDelegatingTool {
@@ -304,6 +316,12 @@ pub fn all_tools_with_runtime(
     tool_arcs.push(Arc::new(ScreenshotTool::new(security.clone())));
     tool_arcs.push(Arc::new(ImageInfoTool::new(security.clone())));
 
+    // Claude Code integration — wraps the `claude` CLI for plan/implement/review/fix
+    tool_arcs.push(Arc::new(ClaudeCodeTool::new(workspace_dir.to_path_buf())));
+
+    // Business document generation — proposals, pitches, analyses, campaigns, outreach
+    tool_arcs.push(Arc::new(ProposalGenTool::new()));
+
     if let Some(key) = composio_key {
         if !key.is_empty() {
             tool_arcs.push(Arc::new(ComposioTool::new(
@@ -341,7 +359,8 @@ pub fn all_tools_with_runtime(
             },
         )
         .with_parent_tools(parent_tools)
-        .with_multimodal_config(root_config.multimodal.clone());
+        .with_multimodal_config(root_config.multimodal.clone())
+        .with_orchestrator_registry(shared_registry());
         tool_arcs.push(Arc::new(delegate_tool));
     }
 

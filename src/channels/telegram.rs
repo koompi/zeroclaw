@@ -351,6 +351,51 @@ impl TelegramChannel {
         self
     }
 
+    /// Try to send a draft using the native `sendMessageDraft` API (Bot API 9.3+).
+    /// Returns `Some(message_id)` on success, `None` if the method is not supported.
+    async fn try_send_message_draft(
+        &self,
+        chat_id: &str,
+        thread_id: Option<&str>,
+        text: &str,
+    ) -> Option<String> {
+        let mut body = serde_json::json!({
+            "chat_id": chat_id,
+            "text": text,
+        });
+        if let Some(tid) = thread_id {
+            body["message_thread_id"] = serde_json::Value::String(tid.to_string());
+        }
+
+        let resp = match self
+            .client
+            .post(self.api_url("sendMessageDraft"))
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::debug!("sendMessageDraft request failed: {e}");
+                return None;
+            }
+        };
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let err = resp.text().await.unwrap_or_default();
+            tracing::debug!("sendMessageDraft returned {status}: {err}");
+            return None;
+        }
+
+        let resp_json: serde_json::Value = resp.json().await.ok()?;
+        resp_json
+            .get("result")
+            .and_then(|r| r.get("message_id"))
+            .and_then(|id| id.as_i64())
+            .map(|id| id.to_string())
+    }
+
     /// Configure streaming mode for progressive draft updates.
     pub fn with_streaming(
         mut self,
@@ -2159,6 +2204,21 @@ impl Channel for TelegramChannel {
             message.content.clone()
         };
 
+        // Try native sendMessageDraft (Bot API 9.3+) first, fall back to legacy.
+        if self.stream_mode == StreamMode::Native {
+            if let Some(id) = self
+                .try_send_message_draft(&chat_id, thread_id.as_deref(), &initial_text)
+                .await
+            {
+                self.last_draft_edit
+                    .lock()
+                    .insert(chat_id.to_string(), std::time::Instant::now());
+                return Ok(Some(id));
+            }
+            // Fall through to legacy if sendMessageDraft isn't supported.
+            tracing::debug!("sendMessageDraft not supported, falling back to legacy draft");
+        }
+
         let mut body = serde_json::json!({
             "chat_id": chat_id,
             "text": initial_text,
@@ -2226,6 +2286,32 @@ impl Channel for TelegramChannel {
         } else {
             text
         };
+
+        // Native streaming: use sendMessageDraft to stream text progressively.
+        // The message_id from the initial sendMessageDraft is used to continue streaming.
+        if self.stream_mode == StreamMode::Native {
+            let mut body = serde_json::json!({
+                "chat_id": chat_id,
+                "text": display_text,
+                "message_id": message_id.parse::<i64>().unwrap_or(0),
+            });
+
+            let resp = self
+                .client
+                .post(self.api_url("sendMessageDraft"))
+                .json(&body)
+                .send()
+                .await?;
+
+            if resp.status().is_success() {
+                self.last_draft_edit
+                    .lock()
+                    .insert(chat_id.clone(), std::time::Instant::now());
+                return Ok(());
+            }
+            // Fall through to legacy editMessageText on failure.
+            tracing::debug!("sendMessageDraft update failed, falling back to editMessageText");
+        }
 
         let message_id_parsed = match message_id.parse::<i64>() {
             Ok(id) => id,
