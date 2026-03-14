@@ -4522,6 +4522,48 @@ impl Config {
             }
         }
 
+        // Gateway pairing: ZEROCLAW_GATEWAY_REQUIRE_PAIRING
+        if let Ok(val) = std::env::var("ZEROCLAW_GATEWAY_REQUIRE_PAIRING") {
+            if let Ok(b) = val.parse::<bool>() {
+                self.gateway.require_pairing = b;
+            }
+        }
+
+        // Gateway allow public bind: ZEROCLAW_GATEWAY_ALLOW_PUBLIC_BIND
+        if let Ok(val) = std::env::var("ZEROCLAW_GATEWAY_ALLOW_PUBLIC_BIND") {
+            if let Ok(b) = val.parse::<bool>() {
+                self.gateway.allow_public_bind = b;
+            }
+        }
+
+        // Telegram Bot Token: ZEROCLAW_TELEGRAM_BOT_TOKEN
+        if let Ok(token) = std::env::var("ZEROCLAW_TELEGRAM_BOT_TOKEN") {
+            if !token.trim().is_empty() {
+                if self.channels_config.telegram.is_none() {
+                    self.channels_config.telegram = Some(TelegramConfig {
+                        bot_token: token.trim().to_string(),
+                        allowed_users: Vec::new(),
+                        stream_mode: StreamMode::default(),
+                        draft_update_interval_ms: 1000,
+                        interrupt_on_new_message: false,
+                        mention_only: false,
+                    });
+                } else if let Some(ref mut tg) = self.channels_config.telegram {
+                    tg.bot_token = token.trim().to_string();
+                }
+            }
+        }
+
+        // Telegram Allowed Users: ZEROCLAW_TELEGRAM_ALLOWED_USERS (comma separated)
+        if let Ok(users) = std::env::var("ZEROCLAW_TELEGRAM_ALLOWED_USERS") {
+            if !users.trim().is_empty() {
+                let user_list: Vec<String> = users.split(',').map(|s| s.trim().to_string()).collect();
+                if let Some(ref mut tg) = self.channels_config.telegram {
+                    tg.allowed_users = user_list;
+                }
+            }
+        }
+
         // Allow public bind: ZEROCLAW_ALLOW_PUBLIC_BIND
         if let Ok(val) = std::env::var("ZEROCLAW_ALLOW_PUBLIC_BIND") {
             self.gateway.allow_public_bind = val == "1" || val.eq_ignore_ascii_case("true");

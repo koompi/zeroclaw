@@ -102,13 +102,18 @@ ENV ZEROCLAW_GATEWAY_PORT=42617
 # It is set in config.toml as the Ollama URL.
 
 WORKDIR /zeroclaw-data
-USER 65534:65534
 EXPOSE 42617
 ENTRYPOINT ["zeroclaw"]
-CMD ["gateway"]
+CMD ["daemon"]
 
-# ── Stage 3: Production Runtime (Distroless) ─────────────────
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:84fcd3c223b144b0cb6edc5ecc75641819842a9679a3a58fd6294bec47532bf7 AS release
+# ── Stage 3: Production Runtime (Debian) ─────────────────
+FROM debian:trixie-slim AS release
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/zeroclaw /usr/local/bin/zeroclaw
 COPY --from=builder /zeroclaw-data /zeroclaw-data
@@ -124,7 +129,6 @@ ENV ZEROCLAW_GATEWAY_PORT=42617
 # API_KEY must be provided at runtime!
 
 WORKDIR /zeroclaw-data
-USER 65534:65534
 EXPOSE 42617
 ENTRYPOINT ["zeroclaw"]
-CMD ["gateway"]
+CMD ["daemon"]
