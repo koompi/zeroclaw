@@ -114,6 +114,8 @@ impl Default for SecurityPolicy {
                 "head".into(),
                 "tail".into(),
                 "date".into(),
+                "curl".into(),
+                "node".into(),
             ],
             forbidden_paths: vec![
                 // System directories (blocked even when workspace_only=false)
@@ -138,7 +140,7 @@ impl Default for SecurityPolicy {
                 "~/.config".into(),
             ],
             allowed_roots: Vec::new(),
-            max_actions_per_hour: 20,
+            max_actions_per_hour: 500,
             max_cost_per_day_cents: 500,
             require_approval_for_medium_risk: true,
             block_high_risk_commands: true,
@@ -571,7 +573,7 @@ impl SecurityPolicy {
             let args: Vec<String> = words.map(|w| w.to_ascii_lowercase()).collect();
             let joined_segment = cmd_part.to_ascii_lowercase();
 
-            // High-risk commands
+            // High-risk commands (curl and node removed for API access in containers)
             if matches!(
                 base.as_str(),
                 "rm" | "mkfs"
@@ -593,7 +595,6 @@ impl SecurityPolicy {
                     | "iptables"
                     | "ufw"
                     | "firewall-cmd"
-                    | "curl"
                     | "wget"
                     | "nc"
                     | "ncat"
@@ -1033,12 +1034,18 @@ impl SecurityPolicy {
     /// Record an action and check if the rate limit has been exceeded.
     /// Returns `true` if the action is allowed, `false` if rate-limited.
     pub fn record_action(&self) -> bool {
+        if self.max_actions_per_hour == 0 {
+            return true;
+        }
         let count = self.tracker.record();
         count <= self.max_actions_per_hour as usize
     }
 
     /// Check if the rate limit would be exceeded without recording.
     pub fn is_rate_limited(&self) -> bool {
+        if self.max_actions_per_hour == 0 {
+            return false;
+        }
         self.tracker.count() >= self.max_actions_per_hour as usize
     }
 
@@ -1149,9 +1156,13 @@ mod tests {
     #[test]
     fn enforce_tool_operation_act_uses_rate_budget() {
         let p = SecurityPolicy {
-            max_actions_per_hour: 0,
+            max_actions_per_hour: 1, // Changed from 0 (which now means unlimited) to 1
             ..default_policy()
         };
+        // First action should succeed
+        p.enforce_tool_operation(ToolOperation::Act, "memory_store")
+            .unwrap();
+        // Second action should fail due to rate limit
         let err = p
             .enforce_tool_operation(ToolOperation::Act, "memory_store")
             .unwrap_err();
@@ -1176,10 +1187,11 @@ mod tests {
         let p = default_policy();
         assert!(!p.is_command_allowed("rm -rf /"));
         assert!(!p.is_command_allowed("sudo apt install"));
-        assert!(!p.is_command_allowed("curl http://evil.com"));
         assert!(!p.is_command_allowed("wget http://evil.com"));
         assert!(!p.is_command_allowed("python3 exploit.py"));
-        assert!(!p.is_command_allowed("node malicious.js"));
+        // curl and node are now allowed for API access
+        assert!(p.is_command_allowed("curl http://example.com"));
+        assert!(p.is_command_allowed("node script.js"));
     }
 
     #[test]
@@ -1244,8 +1256,9 @@ mod tests {
         // Both sides of the pipe are in the allowlist
         assert!(p.is_command_allowed("ls | grep foo"));
         assert!(p.is_command_allowed("cat file.txt | wc -l"));
+        // curl is now allowed, so pipe with curl is allowed
+        assert!(p.is_command_allowed("ls | curl http://example.com"));
         // Second command not in allowlist — blocked
-        assert!(!p.is_command_allowed("ls | curl http://evil.com"));
         assert!(!p.is_command_allowed("echo hello | python3 -"));
     }
 
@@ -1652,7 +1665,8 @@ mod tests {
     fn command_injection_and_chain_blocked() {
         let p = default_policy();
         assert!(!p.is_command_allowed("ls && rm -rf /"));
-        assert!(!p.is_command_allowed("echo ok && curl http://evil.com"));
+        // curl is now allowed, so && chain with curl is allowed
+        assert!(p.is_command_allowed("echo ok && curl http://example.com"));
         // Both allowed — OK
         assert!(p.is_command_allowed("ls && echo done"));
     }
@@ -1910,12 +1924,18 @@ mod tests {
     }
 
     #[test]
-    fn rate_limit_zero_blocks_everything() {
+    fn rate_limit_zero_means_unlimited() {
         let p = SecurityPolicy {
             max_actions_per_hour: 0,
             ..SecurityPolicy::default()
         };
-        assert!(!p.record_action());
+        // When max_actions_per_hour is 0, rate limiting is disabled
+        assert!(p.record_action());
+        assert!(!p.is_rate_limited());
+        // Should allow many actions
+        for _ in 0..100 {
+            assert!(p.record_action());
+        }
     }
 
     #[test]

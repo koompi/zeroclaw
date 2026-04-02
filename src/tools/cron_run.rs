@@ -260,11 +260,14 @@ mod tests {
             ..Config::default()
         };
         config.autonomy.level = AutonomyLevel::Full;
-        config.autonomy.max_actions_per_hour = 0;
+        config.autonomy.max_actions_per_hour = 1; // Changed from 0 to test rate limiting
         std::fs::create_dir_all(&config.workspace_dir).unwrap();
         let cfg = Arc::new(config);
         let job = cron::add_job(&cfg, "*/5 * * * *", "echo run-now").unwrap();
-        let tool = CronRunTool::new(cfg.clone(), test_security(&cfg));
+        // Use up the one allowed action first
+        let security = test_security(&cfg);
+        security.record_action();
+        let tool = CronRunTool::new(cfg.clone(), security);
 
         let result = tool.execute(json!({ "job_id": job.id })).await.unwrap();
         assert!(!result.success);

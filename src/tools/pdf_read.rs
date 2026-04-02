@@ -339,7 +339,10 @@ mod tests {
     #[tokio::test]
     async fn rate_limit_blocks_request() {
         let tmp = TempDir::new().unwrap();
-        let tool = PdfReadTool::new(test_security_with_limit(tmp.path().to_path_buf(), 0));
+        let security = test_security_with_limit(tmp.path().to_path_buf(), 1); // Changed from 0 to test rate limiting
+        // Use up the one allowed action first
+        security.record_action();
+        let tool = PdfReadTool::new(security);
         let result = tool.execute(json!({"path": "any.pdf"})).await.unwrap();
         assert!(!result.success);
         assert!(result.error.as_deref().unwrap_or("").contains("Rate limit"));

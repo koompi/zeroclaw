@@ -107,7 +107,6 @@ impl ClaudeCodeTool {
             format!("{mode_prefix}\n\n## Context\n{context}\n\n## Task\n{task}")
         };
 
-        args.push("--prompt".to_string());
         args.push(full_prompt);
 
         args

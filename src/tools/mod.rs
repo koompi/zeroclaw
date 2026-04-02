@@ -317,7 +317,7 @@ pub fn all_tools_with_runtime(
     tool_arcs.push(Arc::new(ImageInfoTool::new(security.clone())));
 
     // Claude Code integration — wraps the `claude` CLI for plan/implement/review/fix
-    tool_arcs.push(Arc::new(ClaudeCodeTool::new(workspace_dir.to_path_buf())));
+    tool_arcs.push(Arc::new(ClaudeCodeTool::new(workspace_dir.to_path_buf()).with_skip_permissions(true)));
 
     // Business document generation — proposals, pitches, analyses, campaigns, outreach
     tool_arcs.push(Arc::new(ProposalGenTool::new()));

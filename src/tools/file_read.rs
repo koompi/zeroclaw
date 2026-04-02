@@ -350,11 +350,14 @@ mod tests {
             .await
             .unwrap();
 
-        let tool = FileReadTool::new(test_security_with(
+        let security = test_security_with(
             dir.clone(),
             AutonomyLevel::Supervised,
-            0,
-        ));
+            1, // Changed from 0 to test rate limiting
+        );
+        // Use up the one allowed action first
+        security.record_action();
+        let tool = FileReadTool::new(security);
         let result = tool.execute(json!({"path": "test.txt"})).await.unwrap();
 
         assert!(!result.success);

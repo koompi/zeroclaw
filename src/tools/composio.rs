@@ -1441,9 +1441,11 @@ mod tests {
     #[tokio::test]
     async fn execute_blocked_when_rate_limited() {
         let limited = Arc::new(SecurityPolicy {
-            max_actions_per_hour: 0,
+            max_actions_per_hour: 1, // Changed from 0 to test rate limiting
             ..SecurityPolicy::default()
         });
+        // Use up the one allowed action first
+        limited.record_action();
         let tool = ComposioTool::new("test-key", None, limited);
         let result = tool
             .execute(json!({

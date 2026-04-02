@@ -355,11 +355,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("file.txt"), "").unwrap();
 
-        let tool = GlobSearchTool::new(test_security_with(
+        let security = test_security_with(
             dir.path().to_path_buf(),
             AutonomyLevel::Supervised,
-            0,
-        ));
+            1, // Changed from 0 to test rate limiting
+        );
+        // Use up the one allowed action first
+        security.record_action();
+        let tool = GlobSearchTool::new(security);
         let result = tool.execute(json!({"pattern": "*.txt"})).await.unwrap();
 
         assert!(!result.success);

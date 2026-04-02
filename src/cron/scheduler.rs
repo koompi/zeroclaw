@@ -657,9 +657,11 @@ mod tests {
     async fn run_job_command_blocks_rate_limited() {
         let tmp = TempDir::new().unwrap();
         let mut config = test_config(&tmp).await;
-        config.autonomy.max_actions_per_hour = 0;
+        config.autonomy.max_actions_per_hour = 1; // Changed from 0 to test rate limiting
         let job = test_job("echo should-not-run");
         let security = SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir);
+        // Use up the one allowed action first
+        security.record_action();
 
         let (success, output) = run_job_command(&config, &security, &job).await;
         assert!(!success);
@@ -738,11 +740,13 @@ mod tests {
     async fn run_agent_job_blocks_rate_limited() {
         let tmp = TempDir::new().unwrap();
         let mut config = test_config(&tmp).await;
-        config.autonomy.max_actions_per_hour = 0;
+        config.autonomy.max_actions_per_hour = 1; // Changed from 0 to test rate limiting
         let mut job = test_job("");
         job.job_type = JobType::Agent;
         job.prompt = Some("Say hello".into());
         let security = SecurityPolicy::from_config(&config.autonomy, &config.workspace_dir);
+        // Use up the one allowed action first
+        security.record_action();
 
         let (success, output) = run_agent_job(&config, &security, &job).await;
         assert!(!success);

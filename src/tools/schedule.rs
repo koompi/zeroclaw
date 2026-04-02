@@ -559,7 +559,7 @@ mod tests {
             config_path: tmp.path().join("config.toml"),
             autonomy: crate::config::AutonomyConfig {
                 level: AutonomyLevel::Full,
-                max_actions_per_hour: 0,
+                max_actions_per_hour: 1, // Changed from 0 to test rate limiting
                 ..Default::default()
             },
             ..Config::default()
@@ -571,6 +571,8 @@ mod tests {
             &config.autonomy,
             &config.workspace_dir,
         ));
+        // Use up the one allowed action first
+        security.record_action();
         let tool = ScheduleTool::new(security, config);
 
         let blocked = tool

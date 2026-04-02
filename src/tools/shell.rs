@@ -595,10 +595,12 @@ mod tests {
     async fn shell_blocks_rate_limited() {
         let security = Arc::new(SecurityPolicy {
             autonomy: AutonomyLevel::Supervised,
-            max_actions_per_hour: 0,
+            max_actions_per_hour: 1, // Changed from 0 to test rate limiting (0 now means unlimited)
             workspace_dir: std::env::temp_dir(),
             ..SecurityPolicy::default()
         });
+        // Use up the one allowed action first
+        security.record_action();
         let tool = ShellTool::new(security, test_runtime());
         let result = tool
             .execute(json!({"command": "echo test"}))

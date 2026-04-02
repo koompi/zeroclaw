@@ -408,7 +408,10 @@ mod tests {
 
     #[tokio::test]
     async fn execute_blocks_rate_limit() {
-        let tool = PushoverTool::new(test_security(AutonomyLevel::Full, 0), PathBuf::from("/tmp"));
+        let security = test_security(AutonomyLevel::Full, 1); // Changed from 0 to test rate limiting
+        // Use up the one allowed action first
+        security.record_action();
+        let tool = PushoverTool::new(security, PathBuf::from("/tmp"));
 
         let result = tool.execute(json!({"message": "hello"})).await.unwrap();
         assert!(!result.success);

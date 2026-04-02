@@ -908,11 +908,14 @@ mod tests {
         let dir = TempDir::new().unwrap();
         std::fs::write(dir.path().join("file.txt"), "test content\n").unwrap();
 
-        let tool = ContentSearchTool::new(test_security_with(
+        let security = test_security_with(
             dir.path().to_path_buf(),
             AutonomyLevel::Supervised,
-            0,
-        ));
+            1, // Changed from 0 to test rate limiting
+        );
+        // Use up the one allowed action first
+        security.record_action();
+        let tool = ContentSearchTool::new(security);
         let result = tool.execute(json!({"pattern": "test"})).await.unwrap();
 
         assert!(!result.success);

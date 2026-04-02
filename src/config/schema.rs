@@ -2055,6 +2055,8 @@ impl Default for AutonomyConfig {
                 "head".into(),
                 "tail".into(),
                 "date".into(),
+                "curl".into(),
+                "node".into(),
             ],
             forbidden_paths: vec![
                 "/etc".into(),
@@ -2076,7 +2078,7 @@ impl Default for AutonomyConfig {
                 "~/.aws".into(),
                 "~/.config".into(),
             ],
-            max_actions_per_hour: 20,
+            max_actions_per_hour: 500,
             max_cost_per_day_cents: 500,
             require_approval_for_medium_risk: true,
             block_high_risk_commands: true,
@@ -4246,9 +4248,6 @@ impl Config {
         }
 
         // Autonomy
-        if self.autonomy.max_actions_per_hour == 0 {
-            anyhow::bail!("autonomy.max_actions_per_hour must be greater than 0");
-        }
         for (i, env_name) in self.autonomy.shell_env_passthrough.iter().enumerate() {
             if !is_valid_env_var_name(env_name) {
                 anyhow::bail!(
@@ -4404,6 +4403,13 @@ impl Config {
 
     /// Apply environment variable overrides to config
     pub fn apply_env_overrides(&mut self) {
+        // Max actions per hour: ZEROCLAW_MAX_ACTIONS_PER_HOUR
+        if let Ok(val) = std::env::var("ZEROCLAW_MAX_ACTIONS_PER_HOUR") {
+            if let Ok(num) = val.parse::<u32>() {
+                self.autonomy.max_actions_per_hour = num;
+            }
+        }
+
         // API Key: ZEROCLAW_API_KEY or API_KEY (generic)
         if let Ok(key) = std::env::var("ZEROCLAW_API_KEY").or_else(|_| std::env::var("API_KEY")) {
             if !key.is_empty() {
@@ -5006,7 +5012,7 @@ mod tests {
         assert!(a.allowed_commands.contains(&"git".to_string()));
         assert!(a.allowed_commands.contains(&"cargo".to_string()));
         assert!(a.forbidden_paths.contains(&"/etc".to_string()));
-        assert_eq!(a.max_actions_per_hour, 20);
+        assert_eq!(a.max_actions_per_hour, 500);
         assert_eq!(a.max_cost_per_day_cents, 500);
         assert!(a.require_approval_for_medium_risk);
         assert!(a.block_high_risk_commands);
@@ -5136,7 +5142,7 @@ default_temperature = 0.7
                 workspace_only: false,
                 allowed_commands: vec!["docker".into()],
                 forbidden_paths: vec!["/secret".into()],
-                max_actions_per_hour: 50,
+                max_actions_per_hour: 500,
                 max_cost_per_day_cents: 1000,
                 require_approval_for_medium_risk: false,
                 block_high_risk_commands: true,

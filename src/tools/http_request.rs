@@ -698,9 +698,11 @@ mod tests {
     #[tokio::test]
     async fn execute_blocks_when_rate_limited() {
         let security = Arc::new(SecurityPolicy {
-            max_actions_per_hour: 0,
+            max_actions_per_hour: 1, // Changed from 0 to test rate limiting
             ..SecurityPolicy::default()
         });
+        // Use up the one allowed action first
+        security.record_action();
         let tool = HttpRequestTool::new(security, vec!["example.com".into()], 1_000_000, 30);
         let result = tool
             .execute(json!({"url": "https://example.com"}))
