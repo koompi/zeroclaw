@@ -91,6 +91,7 @@ pub struct SecurityPolicy {
     pub require_approval_for_medium_risk: bool,
     pub block_high_risk_commands: bool,
     pub shell_env_passthrough: Vec<String>,
+    pub container_mode: bool,
     pub tracker: ActionTracker,
 }
 
@@ -145,6 +146,7 @@ impl Default for SecurityPolicy {
             require_approval_for_medium_risk: true,
             block_high_risk_commands: true,
             shell_env_passthrough: vec![],
+            container_mode: false,
             tracker: ActionTracker::new(),
         }
     }
@@ -724,33 +726,38 @@ impl SecurityPolicy {
             return false;
         }
 
-        // Block subshell/expansion operators — these allow hiding arbitrary
-        // commands inside an allowed command (e.g. `echo $(rm -rf /)`) and
-        // bypassing path checks through variable indirection. The helper below
-        // ignores escapes and literals inside single quotes, so `$(` or `${`
-        // literals are permitted there.
-        if command.contains('`')
-            || contains_unquoted_shell_variable_expansion(command)
-            || command.contains("<(")
-            || command.contains(">(")
-        {
-            return false;
-        }
+        // In container mode, skip shell injection protections — the container
+        // itself is the sandbox so variable expansion, redirections, and tee
+        // are safe.
+        if !self.container_mode {
+            // Block subshell/expansion operators — these allow hiding arbitrary
+            // commands inside an allowed command (e.g. `echo $(rm -rf /)`) and
+            // bypassing path checks through variable indirection. The helper below
+            // ignores escapes and literals inside single quotes, so `$(` or `${`
+            // literals are permitted there.
+            if command.contains('`')
+                || contains_unquoted_shell_variable_expansion(command)
+                || command.contains("<(")
+                || command.contains(">(")
+            {
+                return false;
+            }
 
-        // Block shell redirections (`<`, `>`, `>>`) — they can read/write
-        // arbitrary paths and bypass path checks.
-        // Ignore quoted literals, e.g. `echo "a>b"` and `echo "a<b"`.
-        if contains_unquoted_char(command, '>') || contains_unquoted_char(command, '<') {
-            return false;
-        }
+            // Block shell redirections (`<`, `>`, `>>`) — they can read/write
+            // arbitrary paths and bypass path checks.
+            // Ignore quoted literals, e.g. `echo "a>b"` and `echo "a<b"`.
+            if contains_unquoted_char(command, '>') || contains_unquoted_char(command, '<') {
+                return false;
+            }
 
-        // Block `tee` — it can write to arbitrary files, bypassing the
-        // redirect check above (e.g. `echo secret | tee /etc/crontab`)
-        if command
-            .split_whitespace()
-            .any(|w| w == "tee" || w.ends_with("/tee"))
-        {
-            return false;
+            // Block `tee` — it can write to arbitrary files, bypassing the
+            // redirect check above (e.g. `echo secret | tee /etc/crontab`)
+            if command
+                .split_whitespace()
+                .any(|w| w == "tee" || w.ends_with("/tee"))
+            {
+                return false;
+            }
         }
 
         // Block background command chaining (`&`), which can hide extra
@@ -1077,6 +1084,7 @@ impl SecurityPolicy {
             require_approval_for_medium_risk: autonomy_config.require_approval_for_medium_risk,
             block_high_risk_commands: autonomy_config.block_high_risk_commands,
             shell_env_passthrough: autonomy_config.shell_env_passthrough.clone(),
+            container_mode: autonomy_config.container_mode,
             tracker: ActionTracker::new(),
         }
     }
@@ -2354,5 +2362,68 @@ mod tests {
             !policy.is_path_allowed("subdir%2f..%2f..%2fetc"),
             "URL-encoded parent dir traversal must be blocked"
         );
+    }
+
+    // ── container_mode ─────────────────────────────────────────
+
+    fn container_policy() -> SecurityPolicy {
+        SecurityPolicy {
+            autonomy: AutonomyLevel::Full,
+            container_mode: true,
+            allowed_commands: vec!["*".into()],
+            workspace_only: false,
+            forbidden_paths: vec![],
+            block_high_risk_commands: false,
+            require_approval_for_medium_risk: false,
+            ..SecurityPolicy::default()
+        }
+    }
+
+    #[test]
+    fn container_mode_allows_shell_variable_expansion() {
+        let p = container_policy();
+        assert!(p.is_command_allowed("echo $HOME"));
+        assert!(p.is_command_allowed("cat $SECRET_FILE"));
+        assert!(p.is_command_allowed("echo ${HOME}"));
+        assert!(p.is_command_allowed("curl -H \"Authorization: Bearer $KEY\" https://api.example.com"));
+    }
+
+    #[test]
+    fn container_mode_allows_command_substitution() {
+        let p = container_policy();
+        assert!(p.is_command_allowed("echo $(whoami)"));
+        assert!(p.is_command_allowed("echo `date`"));
+    }
+
+    #[test]
+    fn container_mode_allows_redirections() {
+        let p = container_policy();
+        assert!(p.is_command_allowed("echo hello > output.txt"));
+        assert!(p.is_command_allowed("cat < input.txt"));
+        assert!(p.is_command_allowed("ls >> log.txt"));
+    }
+
+    #[test]
+    fn container_mode_allows_tee() {
+        let p = container_policy();
+        assert!(p.is_command_allowed("echo hello | tee output.txt"));
+        assert!(p.is_command_allowed("tee file.txt"));
+    }
+
+    #[test]
+    fn container_mode_allows_process_substitution() {
+        let p = container_policy();
+        assert!(p.is_command_allowed("cat <(echo hello)"));
+        assert!(p.is_command_allowed("diff <(ls dir1) <(ls dir2)"));
+    }
+
+    #[test]
+    fn default_mode_still_blocks_shell_injection() {
+        // Confirm non-container mode still blocks these
+        let p = default_policy();
+        assert!(!p.is_command_allowed("echo $HOME"));
+        assert!(!p.is_command_allowed("echo $(whoami)"));
+        assert!(!p.is_command_allowed("echo hello > output.txt"));
+        assert!(!p.is_command_allowed("tee file.txt"));
     }
 }

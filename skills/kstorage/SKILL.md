@@ -9,39 +9,58 @@ KOOMPI Cloud's S3/R2-compatible object storage with CDN. Upload any file → get
 
 ## Config
 
-- **API Key:** Read from `~/.openclaw/workspace/.env` → `KCONSOLE_API_KEY`
-- **Org ID:** `69c2b301e996d9081043e879`
+- **API Key:** Available as `$KSTORAGE_API_KEY` env var (or `/zeroclaw-data/workspace/.env` → `KSTORAGE_API_KEY`)
+- **Auth Header:** `x-api-key: sk_...` (bucket-scoped key, NOT Bearer token)
 - **CDN Base:** `https://storage.koompi.cloud`
 - **API Base:** `https://api-kconsole.koompi.cloud`
-- **Upload Path:** `/api/orgs/{orgId}/services/kstorage/api/storage`
+- **Upload Path:** `/api/storage/` (no org ID needed — key is bucket-scoped)
 
 ## Upload Flow (3-Step)
 
 ### Step 1 — Get Upload Token
 ```bash
-KEY=$(grep KCONSOLE_API_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+KEY="$KSTORAGE_API_KEY"
 FILENAME="my-file.png"
 FILESIZE=$(stat -c%s "$FILENAME")
+CONTENT_TYPE="image/png"
 
-curl -s "https://api-kconsole.koompi.cloud/api/orgs/69c2b301e996d9081043e879/services/kstorage/api/storage/upload-token?filename=$FILENAME&size=$FILESIZE" \
-  -H "Authorization: Bearer $KEY"
+# POST with JSON body — NOT GET with query params!
+curl -s -X POST "https://api-kconsole.koompi.cloud/api/storage/upload-token" \
+  -H "x-api-key: $KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"filename\":\"$FILENAME\",\"contentType\":\"$CONTENT_TYPE\",\"size\":$FILESIZE,\"visibility\":\"public\"}"
 ```
 
-Returns JSON with `uploadUrl` and `key`.
+Returns JSON:
+```json
+{
+  "success": true,
+  "data": {
+    "uploadUrl": "https://...",
+    "objectId": "65d...",
+    "key": "org_.../public/uuid.png",
+    "expiresIn": 300
+  }
+}
+```
 
-### Step 2 — Upload Binary
+### Step 2 — Upload Binary to R2
 ```bash
-curl -s -X PUT -H "Content-Type: application/octet-stream" \
+curl -s -X PUT \
+  -H "Content-Type: $CONTENT_TYPE" \
+  -H "Cache-Control: public, max-age=31536000" \
   --data-binary "@$FILENAME" \
   "$UPLOAD_URL"
 ```
 
-### Step 3 — Confirm Upload
+### Step 3 — Confirm Upload (REQUIRED!)
+**CRITICAL:** Must call this within 1 hour or the file is auto-deleted.
+
 ```bash
-curl -s -X POST "https://api-kconsole.koompi.cloud/api/orgs/69c2b301e996d9081043e879/services/kstorage/api/storage/complete" \
-  -H "Authorization: Bearer $KEY" \
+curl -s -X POST "https://api-kconsole.koompi.cloud/api/storage/complete" \
+  -H "x-api-key: $KEY" \
   -H "Content-Type: application/json" \
-  -d '{"key": "THE_KEY_FROM_STEP_1"}'
+  -d "{\"objectId\":\"$OBJECT_ID\"}"
 ```
 
 ### Public URL
@@ -56,25 +75,61 @@ For quick uploads, combine all steps:
 ```bash
 upload_to_kstorage() {
   local FILE="$1"
-  local KEY=$(grep KCONSOLE_API_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+  local KEY="$KSTORAGE_API_KEY"
   local FNAME=$(basename "$FILE")
   local FSIZE=$(stat -c%s "$FILE")
-  local ORG="69c2b301e996d9081043e879"
-  local BASE="https://api-kconsole.koompi.cloud/api/orgs/$ORG/services/kstorage/api/storage"
+  local CTYPE=$(file --mime-type -b "$FILE")
+  local API="https://api-kconsole.koompi.cloud/api/storage"
 
-  # Step 1: Get token
-  local RESP=$(curl -s "$BASE/upload-token?filename=$FNAME&size=$FSIZE" -H "Authorization: Bearer $KEY")
-  local UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['uploadUrl'])")
-  local KEY_NAME=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])")
+  # Step 1: Get upload token (POST with JSON body)
+  local RESP=$(curl -s -X POST "$API/upload-token" \
+    -H "x-api-key: $KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"filename\":\"$FNAME\",\"contentType\":\"$CTYPE\",\"size\":$FSIZE,\"visibility\":\"public\"}")
 
-  # Step 2: Upload
-  curl -s -X PUT -H "Content-Type: application/octet-stream" --data-binary "@$FILE" "$UPLOAD_URL"
+  local UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['uploadUrl'])")
+  local OBJECT_ID=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['objectId'])")
+  local OBJ_KEY=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['key'])")
 
-  # Step 3: Confirm
-  curl -s -X POST "$BASE/complete" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d "{\"key\":\"$KEY_NAME\"}"
+  # Step 2: Upload binary to R2
+  curl -s -X PUT -H "Content-Type: $CTYPE" --data-binary "@$FILE" "$UPLOAD_URL"
 
-  echo "https://storage.koompi.cloud/$KEY_NAME"
+  # Step 3: Confirm upload (objectId, NOT key!)
+  curl -s -X POST "$API/complete" \
+    -H "x-api-key: $KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"objectId\":\"$OBJECT_ID\"}"
+
+  echo "https://storage.koompi.cloud/$OBJ_KEY"
 }
+```
+
+## Other Operations
+
+### List Objects
+```bash
+curl -s "https://api-kconsole.koompi.cloud/api/storage/objects?page=1&limit=50&visibility=public" \
+  -H "x-api-key: $KSTORAGE_API_KEY"
+```
+
+### Get Private File URL (pre-signed, temporary)
+```bash
+curl -s "https://api-kconsole.koompi.cloud/api/storage/objects/{objectId}/url?expiresIn=600" \
+  -H "x-api-key: $KSTORAGE_API_KEY"
+```
+
+### Delete Object
+```bash
+curl -s -X DELETE "https://api-kconsole.koompi.cloud/api/storage/objects/{objectId}" \
+  -H "x-api-key: $KSTORAGE_API_KEY"
+```
+
+### Bulk Delete
+```bash
+curl -s -X POST "https://api-kconsole.koompi.cloud/api/storage/objects/bulk-delete" \
+  -H "x-api-key: $KSTORAGE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"objectIds": ["65d...", "65e..."]}'
 ```
 
 ## Riverbase Upload (HQ Endpoint)
@@ -97,9 +152,10 @@ Returns the CDN URL directly.
 - **Product images** for Riverbase/BIS shops
 - **Any file** Boss wants a shareable link for
 
-## Notes
+## ⚠️ Common Mistakes
 
-- Supports any file type (images, videos, PDFs, zips)
-- No explicit size limit documented — large files may need longer timeouts
-- Files are publicly accessible at the CDN URL
-- No delete API documented yet
+1. **Using GET for upload-token** — it's POST with JSON body, not GET with query params
+2. **Using `Authorization: Bearer`** — KStorage uses `x-api-key` header, not Bearer tokens
+3. **Sending `key` to complete** — it requires `objectId`, not `key`
+4. **Reading response.uploadUrl** — data is nested: `response.data.uploadUrl`
+6. **Forgetting to confirm** — unconfirmed uploads are auto-deleted after 1 hour

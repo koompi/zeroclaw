@@ -19,7 +19,7 @@ description: Universal context primer. When Boss says "@edith sync" or "sync", i
    - Read `SYSTEMS.md`
    - Run `pm2 list`
    - Run `pm2 jlist` if there are running processes (get details)
-   - Check `openclaw cron list --include-disabled` for active crons
+   - Check `zeroclaw cron list --include-disabled` for active crons
 
 3. **Project state**
    - Check if `planning/progress.md` exists and has unfinished tasks

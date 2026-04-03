@@ -17,7 +17,7 @@ This skill enables EDITH to interact with the KConsole API to manage infrastruct
 2. **Self-Learning Protocol (Crucial)**
    - When encountering a `400 Bad Request`, `404 Not Found`, or unknown schema error from KConsole:
      1. Analyze the response body or documentation to find the new required format.
-     2. Immediately use the `edit` tool to update the corresponding endpoint in `/root/.openclaw/workspace/skills/kconsole/references/api-reference.md`.
+     2. Immediately use the `edit` tool to update the corresponding endpoint in `/zeroclaw-data/workspace/skills/kconsole/references/api-reference.md`.
      3. If a new service type or parameter is discovered, add it to the documentation.
      4. Log the learning event in `MEMORY.md`.
 

@@ -15,8 +15,12 @@ mkdir -p /zeroclaw-data/.zeroclaw \
          /zeroclaw-data/workspace/cron \
          /zeroclaw-data/.claude
 
-# Copy default config if missing (volume mount wipes the build-time copy)
-if [ ! -f /zeroclaw-data/.zeroclaw/config.toml ] && [ -f /usr/local/share/zeroclaw/config.toml ]; then
+# Always overwrite config.toml from the image defaults.
+# User-specific settings (API keys, provider) come from env vars injected below,
+# so it's safe to replace the config on every restart. This ensures config changes
+# in new image versions (e.g. container_mode, http_request) take effect without
+# requiring volume deletion.
+if [ -f /usr/local/share/zeroclaw/config.toml ]; then
     cp /usr/local/share/zeroclaw/config.toml /zeroclaw-data/.zeroclaw/config.toml
 fi
 if [ ! -f /zeroclaw-data/.claude.json ] && [ -f /usr/local/share/zeroclaw/.claude.json ]; then
@@ -92,6 +96,14 @@ if [ -n "$STORAGE_KEY" ]; then
 fi
 
 echo "Entrypoint: Skill env file written to $ENV_FILE"
+
+# Export API keys as env vars so skills/shell commands can use $KCONSOLE_API_KEY
+# directly without needing to parse .env files
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
 
 # Final ownership fix — catch any files created/modified above (e.g. .env, config.toml)
 chown -R zeroclaw:zeroclaw /zeroclaw-data

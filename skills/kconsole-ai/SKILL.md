@@ -12,7 +12,7 @@ Unified OpenAI-compatible API proxy hosted on KOOMPI Cloud. Supports text, image
 ## 🔗 Base URL & Authentication
 
 - **Base URL:** `https://ai.koompi.cloud/v1`
-- **API Key:** Read from `~/.openclaw/workspace/.env` → `KCONSOLE_AI_KEY`
+- **API Key:** Available as `$KCONSOLE_AI_KEY` env var, or read from `/zeroclaw-data/workspace/.env` → `KCONSOLE_AI_KEY`
 - **Auth:** `Authorization: Bearer <key>`
 
 For SDK usage:
@@ -53,7 +53,7 @@ curl -X GET "https://ai.koompi.cloud/v1/models" -H "Authorization: Bearer $KEY"
 Standard `/v1/chat/completions` endpoint. Streaming fully supported (`"stream": true`).
 
 ```bash
-KEY=$(grep KCONSOLE_AI_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+KEY="$KCONSOLE_AI_KEY"
 curl -s -X POST "https://ai.koompi.cloud/v1/chat/completions" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
@@ -94,7 +94,7 @@ Gateway intercepts Google's Gemini/Imagen endpoints and routes them through stan
 
 **Via `image_url`:**
 ```bash
-KEY=$(grep KCONSOLE_AI_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+KEY="$KCONSOLE_AI_KEY"
 curl -s -X POST "https://ai.koompi.cloud/v1/images/generations" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
@@ -115,11 +115,11 @@ print('Saved: edited_image.png')
 
 **Via `reference_image` (base64 local file):**
 ```bash
-KEY=$(grep KCONSOLE_AI_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+KEY="$KCONSOLE_AI_KEY"
 # For large base64 payloads, write to temp file to avoid arg length limits
 python3 -c "
 import json, base64, subprocess, os
-env = dict(l.strip().split('=', 1) for l in open(os.path.expanduser('~/.openclaw/workspace/.env')) if '=' in l)
+env = dict(l.strip().split('=', 1) for l in open('/zeroclaw-data/workspace/.env') if '=' in l)
 key = env.get('KCONSOLE_AI_KEY','').strip().strip('\"')
 with open('/path/to/local/image.jpg','rb') as f: img_b64 = base64.b64encode(f.read()).decode()
 with open('/tmp/req_body.json','w') as f: json.dump({
@@ -187,7 +187,7 @@ const response = await openai.images.generate({
 
 ### Text-to-Video
 ```bash
-KEY=$(grep KCONSOLE_AI_KEY ~/.openclaw/workspace/.env | cut -d= -f2 | tr -d '"')
+KEY="$KCONSOLE_AI_KEY"
 curl -s -X POST "https://ai.koompi.cloud/v1/images/generations" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
@@ -214,8 +214,7 @@ Use the `image` parameter to provide a starting frame for the video:
 # Write payload to temp file for large base64
 python3 -c "
 import json, base64, subprocess, os
-env = dict(l.strip().split('=', 1) for l in open(os.path.expanduser('~/.openclaw/workspace/.env')) if '=' in l)
-key = env.get('KCONSOLE_AI_KEY','').strip().strip('\"')
+key = os.environ.get('KCONSOLE_AI_KEY', '')
 with open('/path/to/first_frame.jpg','rb') as f: img_b64 = base64.b64encode(f.read()).decode()
 with open('/tmp/veo_req.json','w') as f: json.dump({
   'model': 'veo-3.1-generate-preview',
@@ -279,8 +278,7 @@ fs.writeFileSync('generated_video.mp4', Buffer.from(response.data[0].b64_json, '
 ```bash
 python3 -c "
 import json, base64, subprocess, os
-env = dict(l.strip().split('=', 1) for l in open(os.path.expanduser('~/.openclaw/workspace/.env')) if '=' in l)
-key = env.get('KCONSOLE_AI_KEY','').strip().strip('\"')
+key = os.environ.get('KCONSOLE_AI_KEY', '')
 with open('./person_face.jpg','rb') as f: img_b64 = base64.b64encode(f.read()).decode()
 with open('/tmp/veo_req.json','w') as f: json.dump({
   'model': 'veo-3.1-generate-preview',

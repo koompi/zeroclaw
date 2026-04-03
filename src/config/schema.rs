@@ -273,7 +273,7 @@ fn default_max_depth() -> u32 {
 }
 
 fn default_max_tool_iterations() -> usize {
-    10
+    50
 }
 
 // ── Hardware Config (wizard-driven) ─────────────────────────────
@@ -419,11 +419,11 @@ pub struct AgentConfig {
 }
 
 fn default_agent_max_tool_iterations() -> usize {
-    10
+    30
 }
 
 fn default_agent_max_history_messages() -> usize {
-    50
+    100
 }
 
 fn default_agent_tool_dispatcher() -> String {
@@ -2017,6 +2017,20 @@ pub struct AutonomyConfig {
     /// model in tool specs.
     #[serde(default)]
     pub non_cli_excluded_tools: Vec<String>,
+
+    /// Container mode: skip hardcoded shell injection protections.
+    ///
+    /// When `true`, the security policy trusts the execution environment (e.g.
+    /// Docker container) as the sandbox and disables checks for:
+    /// - Shell variable expansion (`$VAR`, `$(...)`, `` `...` ``)
+    /// - Shell redirections (`>`, `<`, `>>`)
+    /// - `tee` command blocking
+    /// - Process substitution (`<(...)`, `>(...)`)
+    ///
+    /// **Only enable this inside a container.** On bare metal this removes
+    /// critical security layers.
+    #[serde(default)]
+    pub container_mode: bool,
 }
 
 fn default_auto_approve() -> Vec<String> {
@@ -2087,6 +2101,7 @@ impl Default for AutonomyConfig {
             always_ask: default_always_ask(),
             allowed_roots: Vec::new(),
             non_cli_excluded_tools: Vec::new(),
+            container_mode: false,
         }
     }
 }
@@ -5151,6 +5166,7 @@ default_temperature = 0.7
                 always_ask: vec![],
                 allowed_roots: vec![],
                 non_cli_excluded_tools: vec![],
+                container_mode: false,
             },
             security: SecurityConfig::default(),
             runtime: RuntimeConfig {

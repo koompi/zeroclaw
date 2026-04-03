@@ -77,6 +77,47 @@ base_url = "https://ai.koompi.cloud"
 port = 42617
 host = "[::]"
 allow_public_bind = true
+
+# Container-optimized autonomy: the Docker container IS the sandbox
+[autonomy]
+level = "full"
+workspace_only = false
+require_approval_for_medium_risk = false
+block_high_risk_commands = false
+container_mode = true
+max_actions_per_hour = 1000
+max_cost_per_day_cents = 5000
+allowed_commands = [
+  "git", "npm", "npx", "cargo", "node", "bun",
+  "ls", "cat", "grep", "find", "echo", "pwd", "wc", "head", "tail", "date",
+  "curl", "wget",
+  "python3", "pip3", "pip",
+  "zip", "unzip", "tar", "gzip",
+  "chromium", "chromium-browser",
+  "pdftotext", "pdfinfo", "pdftoppm",
+  "mkdir", "cp", "mv", "rm", "chmod", "touch", "sed", "awk", "sort", "uniq", "tr", "cut", "tee",
+  "env", "which", "xargs", "diff", "patch",
+  "jq", "base64", "sha256sum", "md5sum",
+  "bash", "sh", "stat", "file", "realpath", "dirname", "basename", "readlink",
+  "*"
+]
+forbidden_paths = []
+allowed_roots = ["/zeroclaw-data", "/tmp", "/home/zeroclaw"]
+auto_approve = ["file_read", "memory_recall", "shell"]
+always_ask = []
+
+# Enable HTTP request tool for API calls
+[http_request]
+enabled = true
+allowed_domains = ["*"]
+timeout_secs = 60
+
+# Enable web fetch tool for browsing
+[web_fetch]
+enabled = true
+allowed_domains = ["*"]
+blocked_domains = []
+timeout_secs = 30
 EOF
 # Create onboarding complete marker
 RUN echo '{"hasCompletedOnboarding": true}' > /zeroclaw-data/.claude.json
@@ -88,11 +129,29 @@ FROM debian:trixie-slim@sha256:f6e2cfac5cf956ea044b4bd75e6397b4372ad88fe00908045
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
+    wget \
     nodejs \
     npm \
     gosu \
     git \
+    # Browser automation
+    chromium \
+    # Python runtime + package manager
+    python3 \
+    python3-pip \
+    python3-venv \
+    # Archive tools
+    zip \
+    unzip \
+    # PDF support
+    poppler-utils \
+    # General utilities
+    jq \
+    sed \
+    gawk \
     && npm install -g @anthropic-ai/claude-code \
+    # Python packages for data processing (xlsx, csv, etc.)
+    && pip3 install --break-system-packages openpyxl pandas xlsxwriter pdfplumber \
     && rm -rf /var/lib/apt/lists/*
 
 # Create zeroclaw user (no sudo needed - entrypoint runs as root and drops via gosu)
@@ -123,6 +182,10 @@ RUN mkdir -p /usr/local/share/zeroclaw/skills && \
 # Use consistent workspace path
 ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/home/zeroclaw
+# Chromium runs inside Docker container — must use --no-sandbox
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # Defaults for local dev (Ollama) - matches config.template.toml
 ENV PROVIDER="ollama"
 ENV ZEROCLAW_MODEL="llama3.2"
@@ -145,6 +208,10 @@ ENV ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7-flash"
 ENV ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5"
 ENV ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.1"
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+# Skills: compact mode only loads skill name/description/location into system prompt
+# Full SKILL.md content is fetched on-demand when the skill is matched
+ENV ZEROCLAW_SKILLS_PROMPT_MODE="compact"
+ENV ZEROCLAW_OPEN_SKILLS_ENABLED="false"
 # Pass your KConsole API key at runtime using:
 #   -e ANTHROPIC_AUTH_TOKEN="your-kconsole-api-key"
 # Or for ZeroClaw directly:
@@ -170,10 +237,28 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     git \
     curl \
+    wget \
     nodejs \
     npm \
     gosu \
+    # Browser automation
+    chromium \
+    # Python runtime + package manager
+    python3 \
+    python3-pip \
+    python3-venv \
+    # Archive tools
+    zip \
+    unzip \
+    # PDF support
+    poppler-utils \
+    # General utilities
+    jq \
+    sed \
+    gawk \
     && npm install -g @anthropic-ai/claude-code \
+    # Python packages for data processing (xlsx, csv, etc.)
+    && pip3 install --break-system-packages openpyxl pandas xlsxwriter pdfplumber \
     && rm -rf /var/lib/apt/lists/*
 
 # Create zeroclaw user (no sudo needed - entrypoint runs as root and drops via gosu)
@@ -198,6 +283,10 @@ RUN mkdir -p /usr/local/share/zeroclaw/skills && \
 # Environment setup
 ENV ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace
 ENV HOME=/home/zeroclaw
+# Chromium runs inside Docker container — must use --no-sandbox
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --headless --disable-gpu --disable-dev-shm-usage"
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 # Default provider and model are set in config.toml, not here,
 # so config file edits are not silently overridden
 #ENV PROVIDER=
@@ -212,6 +301,9 @@ ENV ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7-flash"
 ENV ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5"
 ENV ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.1"
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+# Skills: compact mode only loads skill name/description/location into system prompt
+ENV ZEROCLAW_SKILLS_PROMPT_MODE="compact"
+ENV ZEROCLAW_OPEN_SKILLS_ENABLED="false"
 # Pass your KConsole API key at runtime using:
 #   -e ANTHROPIC_AUTH_TOKEN="your-kconsole-api-key"
 
