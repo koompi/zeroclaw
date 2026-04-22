@@ -51,3 +51,10 @@ enabled = true
 allowed_domains = ["*"]
 blocked_domains = []
 timeout_secs = 30
+
+# Voice transcription via KConsole AI Gateway (OpenAI Whisper-compatible)
+[transcription]
+enabled = true
+api_url = "https://ai.koompi.cloud/v1/audio/transcriptions"
+model = "whisper-1"
+max_duration_secs = 120
