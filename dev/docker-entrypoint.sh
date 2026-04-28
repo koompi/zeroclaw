@@ -107,6 +107,35 @@ if [ -n "$ORG_KEY" ]; then
         echo "KCONSOLE_API_KEY=\"$ORG_KEY\"" >> "$ENV_FILE"
 fi
 
+echo "Entrypoint: Skill env file written to $ENV_FILE"
+
+# ── Auto-propagate additional user env vars → workspace .env ──
+# Any Docker env var that isn't a system var or already-handled ZeroClaw var
+# gets written to .env so skills can read it (e.g. RIVERBASE_API_URL, DATABASE_URL, etc.)
+# Excluded prefixes: ZEROCLAW_, KCONSOLE_, KSTORAGE_, ANTHROPIC_, API_KEY, and system vars.
+SKIP_VARS="^(PATH|HOME|HOSTNAME|TERM|SHELL|PWD|SHLVL|OLDPWD|_|LANG|LC_ALL|LC_CTYPE|LC_MESSAGES|LC_NUMERIC|LC_TIME|GOSU_VERSION|ZEROCLAW_|KCONSOLE_|KSTORAGE_|ANTHROPIC_|API_KEY$|ZEROCLAW_DATA|DEBIAN_FRONTEND|GPG_KEY|PYTHON_|GOPATH|CARGO_|RUSTUP_|NODE_|NPM_|BUN_|JAVA_)"
+
+while IFS='=' read -r key value; do
+    # Skip vars matching excluded patterns
+    if echo "$key" | grep -qE "$SKIP_VARS"; then
+        continue
+    fi
+    # Skip empty keys or values
+    if [ -z "$key" ] || [ -z "$value" ]; then
+        continue
+    fi
+    # Only accept valid env var names (letters, digits, underscore; must start with letter or _)
+    if ! echo "$key" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$'; then
+        continue
+    fi
+    # Write to .env if not already present
+    if ! grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+        echo "${key}=\"${value}\"" >> "$ENV_FILE"
+    fi
+done < <(env)
+
+echo "Entrypoint: Additional user env vars propagated to $ENV_FILE"
+
 # KCONSOLE_API_URL = KConsole API base URL
 API_URL="${KCONSOLE_API_URL:-https://api-kconsole.koompi.cloud}"
 grep -q "^KCONSOLE_API_URL=" "$ENV_FILE" 2>/dev/null && \
