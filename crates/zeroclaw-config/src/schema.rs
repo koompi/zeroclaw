@@ -5745,6 +5745,10 @@ pub struct AutonomyConfig {
     /// Timeout in seconds for shell tool subprocesses. Default: 60.
     #[serde(default = "default_shell_timeout_secs")]
     pub shell_timeout_secs: u64,
+
+    /// In container mode, skip shell injection protections. Default: `false`.
+    #[serde(default)]
+    pub container_mode: bool,
 }
 
 fn default_shell_timeout_secs() -> u64 {
@@ -5810,6 +5814,7 @@ impl Default for AutonomyConfig {
             allowed_roots: Vec::new(),
             non_cli_excluded_tools: Vec::new(),
             shell_timeout_secs: default_shell_timeout_secs(),
+            container_mode: false,
         }
     }
 }
@@ -11938,6 +11943,7 @@ auto_save = true
                 allowed_roots: vec![],
                 non_cli_excluded_tools: vec![],
                 shell_timeout_secs: default_shell_timeout_secs(),
+                container_mode: false,
             },
             trust: crate::scattered_types::TrustConfig::default(),
             backup: BackupConfig::default(),

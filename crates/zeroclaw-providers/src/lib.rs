@@ -84,6 +84,7 @@ const ZAI_GLOBAL_BASE_URL: &str = "https://api.z.ai/api/coding/paas/v4";
 const ZAI_CN_BASE_URL: &str = "https://open.bigmodel.cn/api/coding/paas/v4";
 const QIANFAN_BASE_URL: &str = "https://qianfan.baidubce.com/v2";
 const VERCEL_AI_GATEWAY_BASE_URL: &str = "https://ai-gateway.vercel.sh/v1";
+const KOOMPI_AI_GATEWAY_BASE_URL: &str = "https://ai-gateway.koompi.app/v1";
 
 pub fn is_minimax_intl_alias(name: &str) -> bool {
     matches!(
@@ -959,6 +960,7 @@ fn resolve_provider_credential(name: &str, credential_override: Option<&str>) ->
         "synthetic" => vec!["SYNTHETIC_API_KEY"],
         "opencode" | "opencode-zen" => vec!["OPENCODE_API_KEY"],
         "opencode-go" => vec!["OPENCODE_GO_API_KEY"],
+        "koompi" | "koompi-ai" => vec!["KOOMPI_AI_GATEWAY_API_KEY", "AI_GATEWAY_API_KEY"],
         "vercel" | "vercel-ai" => vec!["VERCEL_API_KEY"],
         "cloudflare" | "cloudflare-ai" => vec!["CLOUDFLARE_API_KEY"],
         "ovhcloud" | "ovh" => vec!["OVH_AI_ENDPOINTS_ACCESS_TOKEN"],
@@ -1248,6 +1250,12 @@ fn create_provider_with_url_and_options(
         "vercel" | "vercel-ai" => Ok(compat(OpenAiCompatibleProvider::new(
             "Vercel AI Gateway",
             VERCEL_AI_GATEWAY_BASE_URL,
+            key,
+            AuthStyle::Bearer,
+        ))),
+        "koompi" | "koompi-ai" => Ok(compat(OpenAiCompatibleProvider::new(
+            "KOOMPI AI Gateway",
+            KOOMPI_AI_GATEWAY_BASE_URL,
             key,
             AuthStyle::Bearer,
         ))),

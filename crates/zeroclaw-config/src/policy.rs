@@ -176,6 +176,7 @@ pub struct SecurityPolicy {
     pub block_high_risk_commands: bool,
     pub shell_env_passthrough: Vec<String>,
     pub shell_timeout_secs: u64,
+    pub container_mode: bool,
     pub tracker: PerSenderTracker,
 }
 
@@ -309,6 +310,7 @@ impl Default for SecurityPolicy {
             block_high_risk_commands: true,
             shell_env_passthrough: vec![],
             shell_timeout_secs: 60,
+            container_mode: false,
             tracker: PerSenderTracker::new(),
         }
     }
@@ -1089,46 +1091,51 @@ impl SecurityPolicy {
             return true;
         }
 
-        // Block subshell/expansion operators — these allow hiding arbitrary
-        // commands inside an allowed command (e.g. `echo $(rm -rf /)`) and
-        // bypassing path checks through variable indirection. The helper below
-        // ignores escapes and literals inside single quotes, so `$(` or `${`
-        // literals are permitted there.
-        if command.contains('`')
-            || contains_unquoted_shell_variable_expansion(command)
-            || command.contains("<(")
-            || command.contains(">(")
-        {
-            return false;
-        }
+        // In container mode, skip shell injection protections — the container
+        // itself is the sandbox so variable expansion, redirections, and tee
+        // are safe.
+        if !self.container_mode {
+            // Block subshell/expansion operators — these allow hiding arbitrary
+            // commands inside an allowed command (e.g. `echo $(rm -rf /)`) and
+            // bypassing path checks through variable indirection. The helper below
+            // ignores escapes and literals inside single quotes, so `$(` or `${`
+            // literals are permitted there.
+            if command.contains('`')
+                || contains_unquoted_shell_variable_expansion(command)
+                || command.contains("<(")
+                || command.contains(">(")
+            {
+                return false;
+            }
 
-        // Block shell redirections that target files. Allow safe forms:
-        //   - `2>/dev/null`, `>/dev/null`, `1>/dev/null` (output suppression)
-        //   - `2>&1`, `1>&2` (fd merging)
-        //   - `<<` heredocs, `<<<` here-strings (input literals)
-        if contains_unsafe_output_redirect(command) {
-            return false;
-        }
-        if contains_unquoted_input_redirect(command) {
-            return false;
-        }
+            // Block shell redirections that target files. Allow safe forms:
+            //   - `2>/dev/null`, `>/dev/null`, `1>/dev/null` (output suppression)
+            //   - `2>&1`, `1>&2` (fd merging)
+            //   - `<<` heredocs, `<<<` here-strings (input literals)
+            if contains_unsafe_output_redirect(command) {
+                return false;
+            }
+            if contains_unquoted_input_redirect(command) {
+                return false;
+            }
 
-        // Block `tee` — it can write to arbitrary files, bypassing the
-        // redirect check above (e.g. `echo secret | tee /etc/crontab`)
-        if command
-            .split_whitespace()
-            .any(|w| w == "tee" || w.ends_with("/tee"))
-        {
-            return false;
-        }
+            // Block `tee` — it can write to arbitrary files, bypassing the
+            // redirect check above (e.g. `echo secret | tee /etc/crontab`)
+            if command
+                .split_whitespace()
+                .any(|w| w == "tee" || w.ends_with("/tee"))
+            {
+                return false;
+            }
 
-        // Block background command chaining (`&`), which can hide extra
-        // sub-commands and outlive timeout expectations. Keep `&&` allowed.
-        // Strip fd-merge redirects (N>&M, N<&M) first so their `&` isn't
-        // flagged as background chaining.
-        let ampersand_check = strip_fd_merge_redirects(command);
-        if contains_unquoted_single_ampersand(&ampersand_check) {
-            return false;
+            // Block background command chaining (`&`), which can hide extra
+            // sub-commands and outlive timeout expectations. Keep `&&` allowed.
+            // Strip fd-merge redirects (N>&M, N<&M) first so their `&` isn't
+            // flagged as background chaining.
+            let ampersand_check = strip_fd_merge_redirects(command);
+            if contains_unquoted_single_ampersand(&ampersand_check) {
+                return false;
+            }
         }
 
         // Split on unquoted command separators and validate each sub-command.
@@ -1609,6 +1616,7 @@ impl SecurityPolicy {
             block_high_risk_commands: autonomy_config.block_high_risk_commands,
             shell_env_passthrough: autonomy_config.shell_env_passthrough.clone(),
             shell_timeout_secs: autonomy_config.shell_timeout_secs,
+            container_mode: autonomy_config.container_mode,
             tracker: PerSenderTracker::new(),
         }
     }
