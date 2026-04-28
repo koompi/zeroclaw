@@ -9,15 +9,40 @@ set -e
 # This is necessary because mounted volumes often default to root ownership.
 echo "Entrypoint: Ensuring /zeroclaw-data is writable by 'zeroclaw'..."
 
+# Create symlink for /data to /zeroclaw-data if it doesn't exist
+# If /data exists and is a directory (from -v), we skip symlinking to avoid the 'File exists' error.
+if [ ! -e /data ]; then
+    ln -s /zeroclaw-data /data
+fi
+
 # Ensure all required subdirectories exist BEFORE chown (volume mount wipes build-time contents)
 mkdir -p /zeroclaw-data/.zeroclaw \
          /zeroclaw-data/workspace/skills \
          /zeroclaw-data/workspace/cron \
          /zeroclaw-data/.claude
 
+# Copy pre-installed skills to the workspace volume if it's empty
+if [ -d /usr/local/share/zeroclaw/skills ] && [ -z "$(ls -A /zeroclaw-data/workspace/skills)" ]; then
+    echo "Entrypoint: Initializing skills directory with pre-installed skills..."
+    cp -r /usr/local/share/zeroclaw/skills/* /zeroclaw-data/workspace/skills/
+fi
+
+# Ensure root also has the same config/workspace if needed (some subcommands run as root)
+mkdir -p /root/.zeroclaw
+ln -sf /zeroclaw-data/.zeroclaw/config.toml /root/.zeroclaw/config.toml
+ln -sf /zeroclaw-data/workspace /root/.zeroclaw/workspace
+
 # ── Config Template Generation ──────────────────────────
 # Ensure the config directory in home exists
 mkdir -p /home/zeroclaw/.zeroclaw
+
+# Fix workspace symlink for the zeroclaw user
+# This ensures the bot (running as zeroclaw) sees the persisted skills and memory
+if [ ! -L /home/zeroclaw/.zeroclaw/workspace ]; then
+    echo "Entrypoint: Symlinking /zeroclaw-data/workspace to zeroclaw user home..."
+    rm -rf /home/zeroclaw/.zeroclaw/workspace
+    ln -s /zeroclaw-data/workspace /home/zeroclaw/.zeroclaw/workspace
+fi
 
 if [ -f /usr/local/share/zeroclaw/config.template.toml ]; then
     echo "Entrypoint: Generating config.toml for user zeroclaw..."

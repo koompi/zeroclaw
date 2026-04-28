@@ -7,8 +7,6 @@ host = "0.0.0.0"
 [providers.custom]
 base_url = "https://ai.koompi.cloud/v1"
 api_key = "${ZEROCLAW_API_KEY}"
-think = true
-reasoning_effort = "medium"
 
 [agent]
 max_tool_iterations = 50
@@ -17,17 +15,6 @@ parallel_tools = true
 [agent.thinking]
 enabled = true
 level = "medium"
-
-[autonomy]
-auto_approve = ["file_read", "memory_recall", "web_search_tool", "web_fetch", "calculator", "glob_search", "content_search", "image_info", "weather", "browser", "browser_open", "read_skill", "http_request", "file_write"]
-allowed_commands = ["git", "npm", "bun", "ls", "cat", "grep", "find", "echo", "pwd", "wc", "head", "tail", "date", "python", "python3", "pip", "node", "curl", "wget"]
-
-[multimodal]
-allow_remote_fetch = true
-max_image_size_mb = 10
-max_images = 10
-vision_provider = "custom"
-vision_model = "gemini-3-flash"
 
 [media_pipeline]
 enabled = true
@@ -46,7 +33,6 @@ language = "km"
 [channels.telegram]
 enabled = true
 bot_token = "${ZEROCLAW_TELEGRAM_BOT_TOKEN}"
-show_reasoning = true
 allowed_users = ["${ZEROCLAW_TELEGRAM_ALLOWED_USERS}"]
 stream_mode = "partial"
 interrupt_on_new_message = true
