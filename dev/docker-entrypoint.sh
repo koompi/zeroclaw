@@ -44,6 +44,12 @@ if [ ! -L /home/zeroclaw/.zeroclaw/workspace ]; then
     ln -s /zeroclaw-data/workspace /home/zeroclaw/.zeroclaw/workspace
 fi
 
+# Link /workspace to the internal workspace for better path compatibility [IMAGE:/workspace/...]
+if [ ! -e /workspace ]; then
+    echo "Entrypoint: Creating global /workspace symlink..."
+    ln -s /zeroclaw-data/workspace /workspace
+fi
+
 if [ -f /usr/local/share/zeroclaw/config.template.toml ]; then
     echo "Entrypoint: Generating config.toml for user zeroclaw..."
     # Replace variables in the template
