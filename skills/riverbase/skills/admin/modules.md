@@ -13,7 +13,7 @@ mutation UpdateModules(
   $cartMode: String       # "DETAILS_ONLY" or "FULL_CHECKOUT"
   $codPayment: Boolean    # enable cash on delivery
   $posCodEnabled: Boolean # enable POS COD mode
-  $cardStyle: String      # "MINIMAL" or "DETAILED"
+  $cardStyle: String      # "MINIMAL" | "BORDERED" | "OVERLAY" | "GLASS"
   $showProductFilter: Boolean
 ) {
   shopUpdateModules(

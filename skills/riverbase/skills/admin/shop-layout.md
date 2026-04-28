@@ -13,6 +13,7 @@ query GetShopLayout($shopId: String!) {
   getShopLayout(shopId: $shopId) {
     id shopId createdAt updatedAt
     header {
+      enabled
       layout
       showAnnouncement
       announcementText
@@ -20,10 +21,14 @@ query GetShopLayout($shopId: String!) {
       showCart
       logoPosition
       sticky
+      bgStyle
+      bgColor
+      textColor
       navigation { label href visibleTo highlight }
       blocks { blockType order props visible }
     }
     footer {
+      enabled
       layout
       description
       columns {
@@ -34,6 +39,11 @@ query GetShopLayout($shopId: String!) {
       socialLinks { platform url icon }
       showNewsletter
       copyrightText
+      bgStyle
+      bgColor
+      textColor
+      linkStyle
+      separatorStyle
       blocks { blockType order props visible }
     }
     aboutPage {
@@ -88,6 +98,7 @@ The `$header` variable is a JSON object:
 
 ```json
 {
+  "enabled": true,
   "layout": "classic",
   "logo_position": "left",
   "sticky": true,
@@ -95,6 +106,9 @@ The `$header` variable is a JSON object:
   "show_cart": true,
   "show_announcement": false,
   "announcement_text": "",
+  "bg_style": "transparent",
+  "bg_color": null,
+  "text_color": null,
   "navigation": [
     { "label": "Home", "href": "/", "visible_to": "all", "highlight": false },
     { "label": "Products", "href": "/products", "visible_to": "all", "highlight": false },
@@ -109,6 +123,7 @@ The `$header` variable is a JSON object:
 
 | Field | Type | Description |
 |---|---|---|
+| `enabled` | Boolean | **Required.** Must be `true` for the header to appear on the storefront. Default is `false`. |
 | `layout` | String | `"classic"`, `"centered"`, `"minimal"` |
 | `logo_position` | String | `"left"` or `"center"` |
 | `sticky` | Boolean | Header stays visible on scroll |
@@ -116,6 +131,9 @@ The `$header` variable is a JSON object:
 | `show_cart` | Boolean | Show cart icon in header |
 | `show_announcement` | Boolean | Show announcement bar above header |
 | `announcement_text` | String | Text displayed in announcement bar |
+| `bg_style` | String | Background style: `"transparent"` (default), `"solid"`, `"blurred"`, `"custom"` |
+| `bg_color` | String\|null | Custom background hex color (only when `bg_style` is `"custom"`, e.g. `"#1a1a2e"`) |
+| `text_color` | String\|null | Custom text hex color (only when `bg_style` is `"custom"`, e.g. `"#ffffff"`) |
 | `navigation` | Array | Navigation links (see NavLink below) |
 | `blocks` | Array | Custom layout blocks |
 
@@ -132,6 +150,7 @@ The `$header` variable is a JSON object:
 **Classic** — Logo left, navigation right, clean and professional:
 ```json
 {
+  "enabled": true,
   "layout": "classic",
   "logo_position": "left",
   "sticky": true,
@@ -152,6 +171,7 @@ The `$header` variable is a JSON object:
 **Centered** — Centered logo with announcement bar:
 ```json
 {
+  "enabled": true,
   "layout": "centered",
   "logo_position": "center",
   "sticky": true,
@@ -171,6 +191,7 @@ The `$header` variable is a JSON object:
 **Minimal** — Clean header with minimal navigation:
 ```json
 {
+  "enabled": true,
   "layout": "minimal",
   "logo_position": "left",
   "sticky": false,
@@ -203,6 +224,7 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 
 ```json
 {
+  "enabled": true,
   "layout": "columns",
   "description": "",
   "columns": [
@@ -228,6 +250,11 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
   ],
   "show_newsletter": true,
   "copyright_text": "© 2025 My Shop. All rights reserved.",
+  "bg_style": "default",
+  "bg_color": null,
+  "text_color": null,
+  "link_style": "plain",
+  "separator_style": "none",
   "blocks": []
 }
 ```
@@ -236,6 +263,7 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 
 | Field | Type | Description |
 |---|---|---|
+| `enabled` | Boolean | **Required.** Must be `true` for the footer to appear on the storefront. Default is `false`. |
 | `layout` | String | `"columns"`, `"simple"`, `"centered"` |
 | `description` | String | Short shop description shown in footer |
 | `columns` | Array | Link columns (see FooterColumn below) |
@@ -243,6 +271,11 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 | `social_links` | Array | Social platform links (see SocialLink below) |
 | `show_newsletter` | Boolean | Show newsletter signup form |
 | `copyright_text` | String | Copyright notice at bottom |
+| `bg_style` | String | Background style: `"default"` (default), `"dark"`, `"light"`, `"primary"`, `"custom"` |
+| `bg_color` | String\|null | Custom background hex color (only when `bg_style` is `"custom"`) |
+| `text_color` | String\|null | Custom text hex color (only when `bg_style` is `"custom"`) |
+| `link_style` | String | Link rendering: `"plain"` (default), `"underline"`, `"pill"`, `"dot_prefix"`, `"dash_prefix"` |
+| `separator_style` | String | Section divider: `"none"` (default), `"line"`, `"dashed"`, `"dotted"`, `"gradient"` |
 | `blocks` | Array | Custom layout blocks |
 
 **FooterColumn object:**
@@ -263,6 +296,7 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 **Columns** — Multi-column links with social and newsletter:
 ```json
 {
+  "enabled": true,
   "layout": "columns",
   "show_social": true,
   "social_links": [
@@ -303,6 +337,7 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 **Simple** — Compact footer with social links:
 ```json
 {
+  "enabled": true,
   "layout": "simple",
   "show_social": true,
   "social_links": [
@@ -319,6 +354,7 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
 **Centered** — Centered layout with newsletter signup:
 ```json
 {
+  "enabled": true,
   "layout": "centered",
   "show_social": true,
   "social_links": [
@@ -328,6 +364,9 @@ mutation UpdateShopFooter($shopId: String!, $footer: JSON!) {
   ],
   "show_newsletter": true,
   "copyright_text": "© 2025 Your Brand. Made with love.",
+  "bg_style": "light",
+  "link_style": "underline",
+  "separator_style": "gradient",
   "columns": [],
   "blocks": []
 }
@@ -547,8 +586,19 @@ Currently `blocks` is typically empty (`[]`) — reserved for future extensibili
 
 ## Agent Notes
 
+- **🔄 Keep skill files updated** — Before using this skill, run `git pull` in the skill directory to ensure you have the latest API docs and field definitions:
+  ```bash
+  cd /home/jiren/projects/organizations/migration/riverbase/koompi-biz-skill && git pull origin main 2>/dev/null || true
+  ```
+  New fields (like `enabled`, `bg_style`, `link_style`) are added frequently — a stale skill file will cause you to miss required fields.
+- **⚠️ `enabled: true` is REQUIRED** — Header and footer are **disabled by default**. Every `updateShopHeader` or `updateShopFooter` mutation **MUST include `"enabled": true`** in the JSON payload, or the storefront will hide the header/footer. If you are setting up or modifying a header or footer, always include this field. Example: `{ "enabled": true, "layout": "classic", ... }`.
+- **Style customization** — Header and footer support visual styling:
+  - **Header `bg_style`**: `"transparent"` (default), `"solid"`, `"blurred"`, `"custom"`. When `"custom"`, also set `bg_color` (hex like `"#1a1a2e"`) and `text_color` (hex like `"#ffffff"`).
+  - **Footer `bg_style`**: `"default"` (default), `"dark"`, `"light"`, `"primary"`, `"custom"`. When `"custom"`, also set `bg_color` and `text_color`.
+  - **Footer `link_style`**: `"plain"` (default), `"underline"`, `"pill"`, `"dot_prefix"`, `"dash_prefix"` — controls how footer column links look.
+  - **Footer `separator_style`**: `"none"` (default), `"line"`, `"dashed"`, `"dotted"`, `"gradient"` — visual divider between footer sections.
 - **Read first, modify second**: Always fetch the current layout with `getShopLayout` before making changes. Mutations replace the entire section (header/footer/about/blog), not individual fields.
-- **snake_case in JSON**: The JSON variables use `snake_case` (e.g., `logo_position`, `show_search`, `hero_title`), while the GraphQL response uses `camelCase` (e.g., `logoPosition`, `showSearch`, `heroTitle`). This is a quirk of the API — send snake_case, receive camelCase.
+- **snake_case in JSON**: The JSON variables use `snake_case` (e.g., `enabled`, `logo_position`, `show_search`, `hero_title`, `bg_style`, `link_style`), while the GraphQL response uses `camelCase` (e.g., `enabled`, `logoPosition`, `showSearch`, `bgStyle`, `linkStyle`). This is a quirk of the API — send snake_case, receive camelCase.
 - **Presets are starting points**: When a user says "set up a professional header", pick the `classic` preset and customize from there. For "minimal footer", use the `simple` preset.
 - **Images**: Upload hero images and team member photos via `POST /uploads/s3` first, then use the returned CDN URL.
 - **Combined update**: Use `updateShopLayout` when changing both header and footer simultaneously to avoid race conditions.

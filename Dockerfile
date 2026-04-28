@@ -267,6 +267,9 @@ RUN useradd -m -u 1000 -s /bin/bash zeroclaw
 COPY --from=builder /app/zeroclaw /usr/local/bin/zeroclaw
 COPY --from=builder /zeroclaw-data /zeroclaw-data
 
+# Overwrite config with release template (includes [transcription], [http_request], etc.)
+COPY dev/config.template.toml /zeroclaw-data/.zeroclaw/config.toml
+
 # Bundle built-in skills (KConsole, KStorage, AI, etc.)
 COPY skills/ /zeroclaw-data/workspace/skills/
 

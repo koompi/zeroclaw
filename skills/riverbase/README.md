@@ -133,12 +133,27 @@ git clone https://github.com/koompi/koompi-biz-skill.git
 - Shop layout, theme, or CMS features are added/changed
 
 ### Environment Variables for Agents
+
+Agents need `RIVERBASE_API_URL`, `RIVERBASE_API_KEY`, and `RIVERBASE_SHOP_ID` to connect. These are stored in a `.env` file on disk, **not** in the shell environment.
+
+The agent MUST read the file directly — do not just check `env` and give up. Execute:
+
+```bash
+# Try the most likely location first
+grep -E 'RIVERBASE_API_URL|RIVERBASE_API_KEY|RIVERBASE_SHOP_ID' /zeroclaw-data/workspace/.env 2>/dev/null
+
+# If not found, try alternatives
+grep -E 'RIVERBASE_API_URL|RIVERBASE_API_KEY|RIVERBASE_SHOP_ID' /openclaw-data/workspace/.env /data/workspace/.env /workspace/.env .env 2>/dev/null
+
+# Last resort: search the whole disk
+find / -maxdepth 4 -name '.env' -exec grep -l 'RIVERBASE' {} \; 2>/dev/null | head -5
 ```
-RIVERBASE_API_KEY=rb_live_817e53b08e90304d44476c59b123839de28ede45e3fda92be15bf5fadc9a32e0
-RIVERBASE_API_URL=https://staging-lite-api.riverbase.org/graphql
-RIVERBASE_SHOP_ID=69d63071b46ac83c4514a5b
-```
-Use `RIVERBASE_API_URL` as the GraphQL endpoint. For production, switch to `https://api.riverbase.org/graphql`.
+
+| Variable | Purpose |
+|---|---|
+| `RIVERBASE_API_URL` | GraphQL endpoint (`https://staging-lite-api.riverbase.org/graphql` for staging, `https://api.riverbase.org/graphql` for production) |
+| `RIVERBASE_API_KEY` | Auth token — use in `Authorization` header (no `Bearer` prefix) |
+| `RIVERBASE_SHOP_ID` | Default shop to operate on |
 
 ## License
 

@@ -91,6 +91,8 @@ Templates: `classic_list` | `magazine_grid` | `minimal_list` | `card_grid`
 
 ---
 
+> **Custom Pages**: For standalone pages (About, Terms, Contact, FAQ), see [admin/pages.md](../admin/pages.md) — those use `createPage`/`updatePage`/`deletePage` and are separate from blog posts and events.
+
 ## Agent Notes
 - **Posts vs Events**: Posts are blog articles. Events have a date, venue, and optional ticket price/capacity.
 - **Images**: Upload first via `POST /uploads/s3`, then pass returned CDN URLs.

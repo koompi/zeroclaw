@@ -15,12 +15,55 @@
 | **API Key Auth** | For server/agent access, set `RIVERBASE_API_KEY` and use as the auth token |
 | **Method** | `POST` with `Content-Type: application/json` body `{"query":"...","variables":{...}}` |
 
-### Environment Variables
+### ⚡ Environment Variables — YOU MUST DO THIS FIRST
+
+**Before doing anything else, you MUST execute the commands below to obtain `RIVERBASE_API_URL`, `RIVERBASE_API_KEY`, and `RIVERBASE_SHOP_ID`.**
+
+These are almost never in your runtime environment. **Do not just check `env` and give up.** You have file access — use it.
+
+#### Step 1: Read the .env file directly
+
+Execute this command NOW:
+
+```bash
+grep -E 'RIVERBASE_API_URL|RIVERBASE_API_KEY|RIVERBASE_SHOP_ID' /zeroclaw-data/workspace/.env 2>/dev/null
 ```
-RIVERBASE_API_KEY=rb_live_817e53b08e90304d44476c59b123839de28ede45e3fda92be15bf5fadc9a32e0
+
+If that file doesn't exist, try these alternatives (execute each one until you get results):
+
+```bash
+# Try openclaw workspace
+grep -E 'RIVERBASE_API_URL|RIVERBASE_API_KEY|RIVERBASE_SHOP_ID' /openclaw-data/workspace/.env 2>/dev/null
+
+# Try generic paths
+grep -E 'RIVERBASE_API_URL|RIVERBASE_API_KEY|RIVERBASE_SHOP_ID' /data/workspace/.env /workspace/.env .env 2>/dev/null
+
+# Last resort: find any .env containing RIVERBASE somewhere on disk
+find / -maxdepth 4 -name '.env' -exec grep -l 'RIVERBASE' {} \; 2>/dev/null | head -5
+# Then read the file it found
+```
+
+#### Step 2: Extract and use the values
+
+Once you have output like:
+```
 RIVERBASE_API_URL=https://staging-lite-api.riverbase.org/graphql
-RIVERBASE_SHOP_ID=69d63071b46ac83c4514a5b
+RIVERBASE_API_KEY=<a real key from the .env file>
+RIVERBASE_SHOP_ID=<a real shop id from the .env file>
 ```
+
+**Use these values directly** in your GraphQL requests:
+- `RIVERBASE_API_URL` → the GraphQL endpoint URL
+- `RIVERBASE_API_KEY` → put in `Authorization` header (no `Bearer` prefix)
+- `RIVERBASE_SHOP_ID` → the `shopId` variable in every query/mutation
+
+#### What NOT to do
+- ❌ Do NOT tell the user "the env vars aren't loaded" — you have file access, go read them
+- ❌ Do NOT give up after checking `env` — the .env file is the primary source
+- ❌ Do NOT ask the user to set environment variables manually
+- ❌ Do NOT skip this step and try API calls without auth — they will fail
+
+> **Never hardcode real API keys in the skill files.** They must only come from the runtime environment or `.env` file.
 
 ---
 
@@ -52,13 +95,16 @@ Load **only** the file relevant to the user's request:
 ### Shop Administration
 | File | Use when user says… |
 |---|---|
-| [admin/shop.md](skills/admin/shop.md) | "create shop", "rename shop", "activate", "set location", "customers", "notifications" |
+| [admin/shop.md](skills/admin/shop.md) | "create shop", "rename shop", "activate", "set location", "customers", "notifications", "set business category" |
+| [admin/seo.md](skills/admin/seo.md) | "meta title", "meta description", "SEO", "keywords", "favicon", "og image", "change shop name", "update logo" |
+| [admin/pages.md](skills/admin/pages.md) | "create page", "about us page", "terms", "privacy policy", "contact page", "custom page", "FAQ page" |
 | [admin/modules.md](skills/admin/modules.md) | "enable POS", "turn on stocking", "COD settings", "announcement", "business hours" |
 | [admin/team.md](skills/admin/team.md) | "add staff", "create role", "remove member" |
 | [admin/shipping.md](skills/admin/shipping.md) | "shipping fee", "delivery zones", "add delivery option" |
 | [admin/discounts.md](skills/admin/discounts.md) | "create coupon", "discount rule", "sale on product" |
 | [admin/sections.md](skills/admin/sections.md) | "create section", "add banner", "homepage layout", "design", "storefront" |
-| [admin/shop-layout.md](skills/admin/shop-layout.md) | "header", "footer", "about page", "shop layout", "customize header", "footer links", "about us page", "blog layout", "navigation", "announcement bar" |
+| [admin/shop-layout.md](skills/admin/shop-layout.md) | "header", "footer", "about page", "customize header", "footer links", "about us page", "blog layout", "navigation", "announcement bar" |
+| [admin/page-layout.md](skills/admin/page-layout.md) | "page layout", "composable layout", "AI design", "storefront design", "banner slider", "arrange sections", "modern layout", "homepage design", "page config" |
 | [admin/appearance.md](skills/admin/appearance.md) | "change theme", "custom colors", "shop appearance", "upload font", "change font", "border radius", "dark mode", "branding", "reset theme" |
 | [admin/customer-auth.md](skills/admin/customer-auth.md) | "customer login", "telegram auth", "user token", "initData", "connect account", "register user", "customer JWT" |
 | [admin/customer-service-agent.md](skills/admin/customer-service-agent.md) | "build CS bot", "customer service agent", "shop bot", "telegram bot for customers", "AI assistant for shop", "OpenClaw agent" |
@@ -111,7 +157,7 @@ InventoryLocationType: WAREHOUSE | STORE | DISPLAY
 OperationalMode: OPEN | CLOSED | BUSY
 ShippingModel:   DISTANCE_BASED | ZONE_BASED | FLAT_RATE | THIRD_PARTY_ONLY
 CartMode:        DETAILS_ONLY | FULL_CHECKOUT
-CardStyle:       MINIMAL | DETAILED
+CardStyle:       MINIMAL | BORDERED | OVERLAY | GLASS
 ```
 
 ### Discount Enums
@@ -142,6 +188,7 @@ Show a summary of what will be affected, then ask "Are you sure? Reply Yes to co
 | `productSetArchived(archived: true)` | Archives (soft-deletes) a product | catalog/products.md |
 | `deleteCategory` | Deletes a category (products become uncategorized) | catalog/categories.md |
 | `deleteSubcategory` | Deletes a subcategory | catalog/categories.md |
+| `deletePage` | Deletes a custom page (URL will 404) | admin/pages.md |
 | `deleteBrand` | Deletes a brand (products lose brand) | catalog/brands.md |
 | `setOrderStatus(CANCELLED)` | Cancels an order (triggers stock reversal) | orders/lifecycle.md |
 | `deleteInventoryLocation` | Deletes a warehouse/store location | inventory/locations.md |
@@ -152,6 +199,7 @@ Show a summary of what will be affected, then ask "Are you sure? Reply Yes to co
 | `deleteDiscountRule` | Deletes a discount rule | admin/discounts.md |
 | `deleteSection` | Deletes a storefront section | admin/sections.md |
 | `resetShopLayout` | Resets all layout customizations (header, footer, about, blog) to defaults | admin/shop-layout.md |
+| `updatePageConfig(pageConfig: null)` | Clears composable page config, reverts to legacy layout | admin/page-layout.md |
 | `deleteDesign` | Deletes a canvas design | admin/sections.md |
 | `deleteTeir` | Deletes a membership tier | advanced/membership.md |
 | `deleteMembership` | Revokes a user's membership | advanced/membership.md |
@@ -162,6 +210,14 @@ Show a summary of what will be affected, then ask "Are you sure? Reply Yes to co
 | `deleteBusinessCategory` | Deletes a platform business category | superadmin/business-categories.md |
 
 ### Bootstrap Query (run first in every session)
+
+**Before running any query**, pull the latest skill files to ensure you have up-to-date API docs:
+
+```bash
+cd /home/jiren/projects/organizations/migration/riverbase/koompi-biz-skill && git pull origin main 2>/dev/null || true
+```
+
+Then run the bootstrap query:
 ```graphql
 query Bootstrap {
   ownedShops {
